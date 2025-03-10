@@ -30,12 +30,11 @@ Pode ser relevante mencionar que, em cada *Java Card* podem existir vários *app
 
 ## 2
 
-O **Trusted Platform Module (TPM)** e o **Hardware Security Module (HSM)** são dispositivos de segurança baseados em *hardware* que oferecem proteção para operações criptográficas e armazenamento seguro de chaves,
-mas diferem no propósito, na implementação e na utilização. Ambos garantem a integridade dos dados e a resistência contra ataques. Criam e guardam chaves de forma segura e realizam funções como criptografia, assinatura digital e autenticação. 
+O **Trusted Platform Module (TPM)** e o **Hardware Security Module (HSM)** são dispositivos de segurança baseados em *hardware* que oferecem proteção para operações criptográficas e armazenamento seguro de chaves, mas diferem no propósito, na implementação e na utilização. Ambos garantem a integridade dos dados e a resistência contra ataques. Criam e guardam chaves de forma segura e realizam funções como criptografia, assinatura digital e autenticação. 
 
-No entanto, o **TPM** é um microchip embutido em computadores, servidores e dispositivos IoT, projetado para garantir a integridade e a autenticidade do sistema. Protegem o processo de inicialização, guardam  chaves criptográficas locais. o *setup* do **TPM** deve ser confiável.
+No entanto, o **TPM** é um microchip embutido em computadores, servidores e dispositivos IoT, projetado para garantir a integridade e a autenticidade do sistema. Protegem o processo de inicialização e guardam chaves criptográficas locais. O *setup* do **TPM** deve ser confiável.
 
-Já o **HSM** tem vários tipos como *Network HSMs* (LAN connection), *Internal HSMs* (PCI), Offline HSM (USB) e *Cloud HSMs* (PW authentication). É utilizado, principalmente, em ambientes empresariais e na *cloud* para proteger, gerir e armazenar chaves criptográficas, garantir segurança em transações financeiras e exigem conformidade com requisitos de segurança rigorosos como FIPS 140-2. Realizam operações criptográficas de alto desempenho - otimizações criptográficas, alta disponibilidade e capacidade de suportar várias operações simultaneamente.
+Já o **HSM** tem vários tipos como *Network HSMs* (LAN connection), *Internal HSMs* (PCI), *Offline HSM* (USB) e *Cloud HSMs* (PW authentication). É utilizado, principalmente, em ambientes empresariais e na *cloud* para proteger, gerir e armazenar chaves criptográficas, garantir segurança em transações financeiras e exigem conformidade com requisitos de segurança rigorosos como *FIPS 140-2*. Realizam operações criptográficas de alto desempenho como otimizações criptográficas, alta disponibilidade e capacidade de suportar várias operações simultaneamente.
 
 Assim, o **TPM** é ideal para a segurança em dispositivos individuais, enquanto o **HSM** é essencial para proteção de dados críticos e gestão de chaves em ambientes empresariais e na *cloud*.
 
