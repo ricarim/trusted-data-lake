@@ -114,5 +114,5 @@ O ataque **Lucky13** é especialmente perigoso para dispositivos de *hardware* c
 
 - Os *smart cards* seguem padrões antigos e não implementam certas contramedidas como execução em tempo constante ou adição de aleatoriedade no tempo de resposta.
 
-- Operam localmente, executando um pedido de cada vez e possuem interação direta com o atacante o que aumenta a precisão da medição dos tempos de resposta.
+- Operam localmente, executando um pedido de cada vez e possuem interação direta com o atacante o que aumenta a precisão da medição dos tempos de resposta. Por exemplo, um terminal de leitura de *smart card* pode ser manipulado para enviar pedidos controlados e medir diretamente os tempos de resposta sem interferências da rede. Isso torna os ataques como o *Lucky13* ainda mais eficazes, já que elimina variáveis imprevisíveis presentes nos servidores ou na rede.
 
