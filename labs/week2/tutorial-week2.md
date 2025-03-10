@@ -91,14 +91,16 @@ Se a previsão estiver correta, a execução ocorre de forma eficiente, sem desp
 
 ## 5 
 ### a)
-O ataque Lucky13 afeta sistemas que utilizam implementações do TLS (Transport Layer Security) com o modo CBC (Cipher Block Chaining). Como o problema decorre do próprio funcionamento do protocolo, qualquer implementação de TLS que utilize CBC pode estar vulnerável caso não tenha sido devidamente corrigida.
+O ataque **Lucky13** afeta sistemas que utilizam os protolos **TLS** (Transport Layer Security) e **DTLS** com o modo de operação **CBC** (Cipher Block Chaining). Também pode ser considerado um *man-in-the-middle attack*. 
 
-Sistemas que ainda utilizam TLS 1.1 ou TLS 1.2 sem as atualizações de segurança apropriadas continuam suscetíveis ao ataque. No entanto, o TLS 1.3 elimina essa vulnerabilidade, pois removeu completamente o suporte a CBC, adotando apenas cifradores baseados em AEAD (Authenticated Encryption with Associated Data), como ChaCha20-Poly1305 e AES-GCM.
+Embora o ataque esteja associado a vulnerabilidade no **TLS** 1.2 e versões anteriores, o problema reside na utilização do na cifra de blocos CBC. Implementações que utilizam essa cifra podem estar vulneráveis ao ataque *Lucky13*, independetemente da versão. 
 
-**As implementações vulneráveis podem ser:** Servidores web; VPNs; bibliotecas criptográficas populares, como OpenSSL; Smart Cards;
+Para mitigar a vulnerabilidade, é necessário deixar de usar cifras de blocos CBC e adotar cifras mais seguras, como as que utilizam **AEAD** (Authenticated Encryption with Associated Data), disponíveis na versão 1.2 e obrigatórias na versão 1.3 do **TLS**, que já dá proteção contra este ataque.
+
+As implementações vulneráveis podem estar em servidores web (o tempo de resposta da verificação do *padding* pode dar informação sobre os dados), VPNs (obter comunicações parciais entre as partes envolvidas), clientes TLS (um servidor malicioso pode manipular as respostas), Smart Cards e HSMs (muitos são projetados para operarem em tempo real, o que torna o ataque mais preciso).
 
 ### b)
-O Lucky13 é um ataque de cronometragem (timing attack) que explora diferenças mínimas no tempo de processamento de mensagens encriptadas em TLS com CBC.
+O **Lucky13** é um *timing attack* que explora diferenças mínimas no tempo de processamento de mensagens encriptadas em TLS com CBC.
 
 A vulnerabilidade surge devido ao uso do esquema MAC-then-Encrypt (MtE) no TLS com CBC, no qual o código de autenticação da mensagem (MAC) é calculado antes da encriptação. Durante a desencriptação, o servidor segue os seguintes passos:
 
