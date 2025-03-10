@@ -3,7 +3,7 @@
 
 ## 1 
 
-Os *Java Cards* podem ser uma tecnologia adequada para um sistema de identificação em bibliotecas porque oferecem segurança, portabilidade, independência de hardware e baixo custo de produção.
+Os *Java Cards* podem ser uma tecnologia adequada para um sistema de identificação em bibliotecas porque oferecem segurança, portabilidade, independência de *hardware* e baixo custo de produção.
 
 ### Segurança 
 
@@ -42,7 +42,7 @@ Assim, o **TPM** é ideal para a segurança em dispositivos individuais, enquant
 
 ## 3
 
-### Por que Intel SGX ou ARM TrustZone são mais adequados do que Hardware Security Modules (HSMs)?
+### Porquê que Intel SGX ou ARM TrustZone são mais adequados do que Hardware Security Modules (HSMs)?
 
 O hospital precisa armazenar e processar dados clínicos sensíveis, o que exige segurança tanto na execução quanto no armazenamento dessas informações.
 
