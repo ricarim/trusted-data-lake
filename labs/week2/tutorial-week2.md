@@ -22,7 +22,7 @@ Os *Java Cards* são compatíveis com diferentes dispositivos e leitores, uma ve
 Devido à sua independência de *hardware*, os *Java Cards* tornam-se uma alternativa de baixo custo porque não exigem infraestruturas complexas para funcionar.
 Como dito anteriormente, podem ser utilizados em diversos dispositivos sem necessidade de *hardware* exclusivo, reduzindo os custos de implementação e manutenção.
 
-Outro fator que contribui para o baixo custo é a possibilidade de atualização do software sem necessidade de substituição do *hardware*. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
+Outro fator que contribui para o baixo custo é a possibilidade de atualização do software, sem ser necessário substituir o *hardware*. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
 
 Pode ser relevante mencionar que, em cada *Java Card* podem existir vários *applets*. Esta característica permite que os dados estejam isolados e protegidos caso um dos *applets* seja comprometido. Também permite que diferentes serviços possam ser disponibilizados no mesmo cartão, o que pode ser útil para a biblioteca.
 
