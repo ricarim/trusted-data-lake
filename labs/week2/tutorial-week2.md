@@ -3,39 +3,41 @@
 
 ## 1 
 
-Os Java Cards podem ser uma tecnologia adequada para um sistema de identificação em bibliotecas porque oferecem segurança, portabilidade, independência de hardware e baixo custo de produção.
+Os *Java Cards* podem ser uma tecnologia adequada para um sistema de identificação em bibliotecas porque oferecem segurança, portabilidade, independência de hardware e baixo custo de produção.
 
 ### Segurança 
 
-Os Java Cards possuem mecanismos criptográficos que garantem que os dados armazenados, como informações pessoais e histórico de empréstimos, estejam protegidos contra acessos não autorizados. Além disso, permitem autenticação segura, garantindo que apenas o utilizador legítimo possa aceder aos seus dados.
+Os *Java Cards* possuem mecanismos criptográficos que garantem que os dados armazenados, como informações pessoais e histórico de empréstimos, estejam protegidos contra acessos não autorizados. Além disso, permitem autenticação segura baseada em PKI, garantindo que apenas o utilizador legítimo possa aceder aos seus dados. São, também, resistentes a violações físicas.
 
 ### Portabilidade
 
-Por serem cartões de pequenas dimensões, semelhantes a cartões bancários ou de identificação, os Java Cards são fáceis de transportar, permitindo que os utilizadores os tenham sempre consigo. Além disso, podem ser utilizados em sistemas de leitura contactless ou com chip.
+Por serem cartões de pequenas dimensões, semelhantes a cartões bancários ou de identificação, os *Java Cards* são fáceis de transportar, permitindo que os utilizadores os tenham sempre consigo. Além disso, podem ser utilizados em sistemas de leitura contactless ou com chip.
 
 ### Independência de Hardware
 
-Os Java Cards são compatíveis com diferentes dispositivos e leitores, uma vez que seguem um padrão universal baseado em Java. Isto significa que podem ser utilizados em qualquer biblioteca equipada com um sistema de leitura compatível, sem necessidade de hardware específico.
+Os *Java Cards* são compatíveis com diferentes dispositivos e leitores, uma vez que seguem um padrão universal baseado em *Java*. Isto significa que podem ser utilizados em qualquer biblioteca equipada com um sistema de leitura compatível, sem necessidade de *hardware* específico.
 
 ### Baixo Custo
 
-Devido à sua independência de hardware, os Java Cards tornam-se uma alternativa de baixo custo porque não exigem infraestruturas complexas para funcionar.
-Como dito anteriormente, podem ser utilizados em diversos dispositivos sem necessidade de hardware exclusivo, reduzindo os custos de implementação e manutenção.
+Devido à sua independência de *hardware*, os *Java Cards* tornam-se uma alternativa de baixo custo porque não exigem infraestruturas complexas para funcionar.
+Como dito anteriormente, podem ser utilizados em diversos dispositivos sem necessidade de *hardware* exclusivo, reduzindo os custos de implementação e manutenção.
 
-Outro fator que contribui para o baixo custo é a possibilidade de atualização do software sem necessidade de substituição do hardware. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
+Outro fator que contribui para o baixo custo é a possibilidade de atualização do software sem necessidade de substituição do *hardware*. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
+
+Pode ser relevante mencionar que, em cada *Java Card* podem existir vários *applets*. Esta característica permite que os dados estejam isolados e protegidos caso um dos *applets* seja comprometido. Também permite que diferentes serviços possam ser disponibilizados no mesmo cartão, o que pode ser útil para a biblioteca.
 
 
 
 ## 2
 
-O Trusted Platform Module (TPM) e o Hardware Security Module (HSM) são dispositivos de segurança baseados em hardware que oferecem proteção para operações criptográficas e armazenamento seguro de chaves,
-mas diferem em propósito, implementação e uso. Ambos garantem a integridade dos dados e a resistência contra ataques, armazenando chaves de forma segura e realizando funções como criptografia, assinatura digital e autenticação. 
+O **Trusted Platform Module (TPM)** e o **Hardware Security Module (HSM)** são dispositivos de segurança baseados em *hardware* que oferecem proteção para operações criptográficas e armazenamento seguro de chaves,
+mas diferem no propósito, na implementação e na utilização. Ambos garantem a integridade dos dados e a resistência contra ataques. Criam e guardam chaves de forma segura e realizam funções como criptografia, assinatura digital e autenticação. 
 
-No entanto, o TPM é um chip embutido em computadores, servidores e dispositivos IoT, projetado para garantir a integridade do sistema, protegendo o processo de inicialização, armazenando credenciais e gerenciando chaves de criptografia locais.
+No entanto, o **TPM** é um microchip embutido em computadores, servidores e dispositivos IoT, projetado para garantir a integridade e a autenticidade do sistema. Protegem o processo de inicialização, guardam  chaves criptográficas locais. o *setup* do **TPM** deve ser confiável.
 
-Já o HSM é um dispositivo externo, como um cartão PCIe, módulo USB ou appliance de rede, utilizado principalmente em ambientes empresariais e na nuvem para proteger chaves criptográficas, garantir segurança em transações financeiras e atender a requisitos de conformidade como FIPS 140-2.
+Já o **HSM** tem vários tipos como *Network HSMs* (LAN connection), *Internal HSMs* (PCI), Offline HSM (USB) e *Cloud HSMs* (PW authentication). É utilizado, principalmente, em ambientes empresariais e na *cloud* para proteger, gerir e armazenar chaves criptográficas, garantir segurança em transações financeiras e exigem conformidade com requisitos de segurança rigorosos como FIPS 140-2. Realizam operações criptográficas de alto desempenho - otimizações criptográficas, alta disponibilidade e capacidade de suportar várias operações simultaneamente.
 
-Assim, o TPM é ideal para segurança de dispositivos individuais, enquanto o HSM é essencial para proteção de dados críticos e gestão de chaves em ambientes empresariais e na nuvem.
+Assim, o **TPM** é ideal para a segurança em dispositivos individuais, enquanto o **HSM** é essencial para proteção de dados críticos e gestão de chaves em ambientes empresariais e na *cloud*.
 
 
 
