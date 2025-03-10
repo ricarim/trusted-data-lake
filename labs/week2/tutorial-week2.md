@@ -11,10 +11,10 @@ Os *Java Cards* podem ser uma tecnologia adequada para um sistema de identifica�
 
 - **Independência de *Hardware*:** Os *Java Cards* são compatíveis com diferentes dispositivos e leitores, uma vez que seguem um padrão universal baseado em *Java*. Isto significa que podem ser utilizados em qualquer biblioteca equipada com um sistema de leitura compatível, sem necessidade de *hardware* específico.
 
-- **Baixo Custo:** Devido à sua independência de *hardware*, os *Java Cards* tornam-se uma alternativa de baixo custo porque não exigem infraestruturas complexas para funcionar.
+- **Baixo Custo:** Devido à sua independência de *hardware*, os *Java Cards* tornam-se uma alternativa de baixo custo porque não exigem um sistema operativo complexo para funcionar.
 Como dito anteriormente, podem ser utilizados em diversos dispositivos sem necessidade de *hardware* exclusivo, reduzindo os custos de implementação e manutenção.
 
-    Outro fator que contribui para o baixo custo é a possibilidade de atualização do software, sem ser necessário substituir o *hardware*. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
+    Outro fator que contribui para o baixo custo é a possibilidade de atualização do *software*, sem ser necessário substituir o *hardware*. Isto significa que novas funcionalidades podem ser adicionadas ao sistema da biblioteca sem custos adicionais com novos cartões ou dispositivos físicos.
 
 Pode ser relevante mencionar que, em cada *Java Card* podem existir vários *applets*. Esta característica permite que os dados estejam isolados e protegidos caso um dos *applets* seja comprometido. Também permite que diferentes serviços possam ser disponibilizados no mesmo cartão, o que pode ser útil para a biblioteca.
 
@@ -90,39 +90,29 @@ Se a previsão estiver correta, a execução ocorre de forma eficiente, sem desp
 
 ## 5 
 ### a)
-O ataque **Lucky13** afeta sistemas que utilizam os protolos **TLS** (Transport Layer Security) e **DTLS** com o modo de operação **CBC** (Cipher Block Chaining). Também pode ser considerado um *man-in-the-middle attack*. 
+O ataque Lucky13 afeta sistemas que utilizam implementações do TLS (Transport Layer Security) com o modo CBC (Cipher Block Chaining). Como o problema decorre do próprio funcionamento do protocolo, qualquer implementação de TLS que utilize CBC pode estar vulnerável caso não tenha sido devidamente corrigida.
 
-Embora o ataque esteja associado a vulnerabilidade no **TLS** 1.2 e versões anteriores, o problema reside na utilização do na cifra de blocos CBC. Implementações que utilizam essa cifra podem estar vulneráveis ao ataque *Lucky13*, independetemente da versão. 
+Sistemas que ainda utilizam TLS 1.1 ou TLS 1.2 sem as atualizações de segurança apropriadas continuam suscetíveis ao ataque. No entanto, o TLS 1.3 elimina essa vulnerabilidade, pois removeu completamente o suporte a CBC, adotando apenas cifradores baseados em AEAD (Authenticated Encryption with Associated Data), como ChaCha20-Poly1305 e AES-GCM.
 
-Para mitigar a vulnerabilidade, é necessário deixar de usar cifras de blocos CBC e adotar cifras mais seguras, como as que utilizam **AEAD** (Authenticated Encryption with Associated Data), disponíveis na versão 1.2 e obrigatórias na versão 1.3 do **TLS**, que já dá proteção contra este ataque.
-
-As implementações vulneráveis podem estar em servidores web (o tempo de resposta da verificação do *padding* pode dar informação sobre os dados), VPNs (obter comunicações parciais entre as partes envolvidas), clientes TLS (um servidor malicioso pode manipular as respostas), Smart Cards e HSMs (muitos são projetados para operarem em tempo real, o que torna o ataque mais preciso).
+**As implementações vulneráveis podem ser:** Servidores web; VPNs; bibliotecas criptográficas populares, como OpenSSL; Smart Cards;
 
 ### b)
-O **Lucky13** é um *timing attack* que explora diferenças mínimas no tempo de processamento de mensagens encriptadas em TLS com CBC.
+O **Lucky13** é um *timing attack* que explora diferenças mínimas no tempo de processamento de mensagens cifradas em **TLS** com **CBC**.
 
-A vulnerabilidade surge devido ao uso do esquema MAC-then-Encrypt (MtE) no TLS com CBC, no qual o código de autenticação da mensagem (MAC) é calculado antes da encriptação. Durante a desencriptação, o servidor segue os seguintes passos:
+A vulnerabilidade surge devido ao uso do esquema *MAC-then-Encrypt* no **TLS** com **CBC**, no qual o código de autenticação da mensagem (MAC) é calculado antes da encriptação. Durante a desencriptação, o servidor segue os seguintes passos:
 
-1. Decifra a mensagem usando o modo CBC.
-2. Verifica e remove o padding adicionado para alinhar o tamanho do bloco.
+1. Decifra a mensagem usando o modo **CBC**.
+2. Verifica e remove o *padding* adicionado para alinhar o tamanho do bloco.
 3. Calcula e verifica o MAC para garantir a integridade da mensagem.
 
-O problema ocorre porque diferentes tipos de padding e variações na verificação do MAC resultam em tempos de processamento ligeiramente diferentes. Estas variações permitem que um atacante envie mensagens manipuladas e meça o tempo de resposta do servidor, inferindo informações sobre o conteúdo encriptado.
+Isto é um problema, pois diferentes tipos de *padding* e variações na verificação do MAC resultam em tempos de processamento ligeiramente diferentes. Estas variações permitem que um atacante envie mensagens manipuladas e meça o tempo de resposta do servidor, inferindo informações sobre o conteúdo cifrado.
 
 ### c)
-O ataque Lucky13 é especialmente perigoso para dispositivos de hardware criptográfico, como smart cards ou Hardware Security Modules (HSMs), por três razões principais:
+O ataque **Lucky13** é especialmente perigoso para dispositivos de *hardware* criptográfico, como *smart cards*, pelas seguintes razões:
 
-1. **Tempos de resposta mais previsíveis:**
-    
-    Dispositivos de hardware, como smart cards, possuem execução altamente determinística, ou seja, realizam operações criptográficas com pouca variação no tempo de resposta. Isso facilita ataques baseados em cronometragem, pois o atacante pode medir diferenças temporais de forma precisa e inferir informações sobre a mensagem cifrada.
+- Dispositivos de *hardware*, como *smart cards*, possuem execuções altamente determinísticas, ou seja, realizam operações criptográficas com variações no tempo de resposta. Isto facilita ataques baseados em tempo de resposta, pois o atacante pode medir diferenças temporais de forma precisa e inferir informações sobre a mensagem cifrada.
 
-2. **Dificuldade em aplicar atualizações de segurança:**
+- Os *smart cards* seguem padrões antigos e não implementam certas contramedidas como execução em tempo constante ou adição de aleatoriedade no tempo de resposta.
 
-    Diferente de sistemas baseados em software (como servidores web), dispositivos de hardware muitas vezes não podem ser facilmente atualizados para corrigir vulnerabilidades.
-    Muitos smart cards e HSMs antigos ainda utilizam implementações vulneráveis de TLS, o que os torna alvos fáceis para ataques temporais.
-
-3. **Acesso direto ao hardware pelo atacante:**
-
-    Em muitos cenários, o atacante pode ter acesso físico ao dispositivo vulnerável. Por exemplo, um terminal de leitura de smart card pode ser manipulado para enviar requisições controladas e medir diretamente os tempos de resposta sem interferências de rede.
-    Isso torna ataques como o Lucky13 ainda mais eficazes, já que elimina variáveis imprevisíveis presentes em servidores ou redes.
+- Operam localmente, executando um pedido de cada vez e possuem interação direta com o atacante o que aumenta a precisão da medição dos tempos de resposta.
 
