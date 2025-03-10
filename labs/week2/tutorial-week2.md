@@ -62,13 +62,12 @@ Concluindo, dado o contexto, onde a maioria dos sistemas hospitalares opera em s
 
 
 ## 4  
-A execução especulativa é uma técnica utilizada em processadores modernos para melhorar o desempenho ao executar instruções antes de saber se elas realmente serão necessárias. 
 
-A execução especulativa é uma técnica utilizada em processadores modernos para melhorar o desempenho ao executar instruções antes de saber se elas realmente serão necessárias. Essa abordagem permite que o processador aproveite melhor os ciclos de clock, reduzindo o tempo de espera por decisões condicionais, como desvios e acessos à memória.
+A execução especulativa é uma técnica utilizada em processadores modernos para melhorar o seu desempenho. Consiste em executar instruções antes que as mesmas sejam necessárias. Esta abordagem permite reduzir o tempo de espera devido a decisões condicionais (*if-statements*), por exemplo.
 
-No entanto, se a previsão do processador estiver incorreta, as instruções executadas especulativamente são descartadas, e o estado do sistema é restaurado para um ponto anterior. Embora esse mecanismo geralmente traga benefícios significativos de desempenho, ele também pode introduzir vulnerabilidades de segurança, como os ataques Spectre e Meltdown, que exploram a execução especulativa para acessar dados sensíveis.
+No entanto, se a abordagem do processador, por exemplo se este fizer uma previsão, estiver incorreta, as instruções executadas especulativamente são descartadas, e o estado do sistema é restaurado para um ponto anterior. Embora este mecanismo geralmente traga benefícios significativos de desempenho, em alguns casos, a execução especulativa pode resultar em reduções do mesmo, especialmente quando existem falhas de previsão ou necessidade de invalidação de cálculos especulativos. 
 
-Além disso, em alguns cenários, a execução especulativa pode resultar em penalizações de desempenho, especialmente quando há falhas de predição de desvio ou necessidade de invalidação de cálculos especulativos. Para mitigar esses riscos, algumas arquiteturas modernas implementam mecanismos de proteção, como restrições na execução especulativa ou melhorias na predição de desvios.
+Para mitigar estes riscos, algumas arquiteturas modernas implementam mecanismos de proteção, como restrições na execução especulativa ou melhorias nas previsões.
 
 ### Execução *Eager*
 Na execução *eager* o processador executa todas as possíveis ramificações de um *if-statement* simultaneamente, sem aguardar a satisfação da condição. Assim que a condição é avaliada, os caminhos desnecessários são descartados, e o programa segue apenas com o resultado correto.
