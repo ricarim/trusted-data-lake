@@ -6,7 +6,7 @@
 
 sgx_enclave_id_t eid = 0;
 
-// OCALL que o enclave chama
+// OCALL that enclave calls
 void ocall_printf(const char* str) {
     printf("%s", str);
 }
@@ -14,17 +14,16 @@ void ocall_printf(const char* str) {
 int main() {
     sgx_status_t ret;
 
-    // Cria enclave
+    // Create enclave
     ret = sgx_create_enclave(ENCLAVE_FILE, SGX_DEBUG_FLAG, NULL, NULL, &eid, NULL);
     if (ret != SGX_SUCCESS) {
-        printf("Erro ao criar enclave: 0x%x\n", ret);
+        printf("Error creating enclave: 0x%x\n", ret);
         return -1;
     }
 
-    // Chama ECALL
+    // Calls ECALL
     ecall_entrypoint(eid);
 
-    // Destroi enclave
     sgx_destroy_enclave(eid);
     return 0;
 }
