@@ -1,0 +1,20 @@
+# Class file must be inside a package (folder) Echo/Echo.java
+# Flag -g is essential
+
+javac -g  -cp  ~/lib/api.jar -source 1.5 -target 1.5 Echo/Echo.java
+
+# You must provide an AID for both the applet classe (Echo.Echo) but also to its package (Echo) 
+converter -debug -applet 0x01:0x02:0x03:0x04:0x05:0x06:0x07:0x08:0x09 Echo.Echo Echo 0x01:0x02:0x03:0x04:0x05:0x06:0x07 1.0
+
+#Install CAP file for the first time
+gppro --install Echo/javacard/Echo.cap 
+
+#Reinstall CAP file afterwards
+gppro --deletedeps --delete 01020304050607
+gppro --install Echo/javacard/Echo.cap 
+
+
+###### Script for gscriptor
+00 A4 04 00 09 01 02 03 04 05 06 07 08 09 1F
+00 01 01 00 01 01 06
+00 01 01 00 0D 48 65 6C 6C 6F 20 77 6F 72 6C 64 20 21 12
