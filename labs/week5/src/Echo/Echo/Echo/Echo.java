@@ -1,68 +1,54 @@
-/*
- * Copyright 2005 Sun Microsystems, Inc. All rights reserved.
- * SUN PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- */
-
-// /*
-// Workfile:@(#)Echo.java	1.7
-// Version:1.7
-// Date:01/03/06
-
 package Echo;
 
 import javacard.framework.*;
 
-public class Echo extends Applet
-{
+public class Echo extends Applet {
+
     private byte[] echoBytes;
+    private short counter;
     private static final short LENGTH_ECHO_BYTES = 256;
 
-    /**
-     * Only this class's install method should create the applet object.
-     */
-    protected Echo()
-    {
+    protected Echo() {
         echoBytes = new byte[LENGTH_ECHO_BYTES];
+        counter = 0;
         register();
     }
 
-    /**
-     * Installs this applet.
-     * @param bArray the array containing installation parameters
-     * @param bOffset the starting offset in bArray
-     * @param bLength the length in bytes of the parameter data in bArray
-     */
-    public static void install(byte[] bArray, short bOffset, byte bLength)
-    {
+    public static void install(byte[] bArray, short bOffset, byte bLength) {
         new Echo();
     }
 
-    /**
-     * Processes an incoming APDU.
-     * @see APDU
-     * @param apdu the incoming APDU
-     * @exception ISOException with the response bytes per ISO 7816-4
-     */
-    public void process(APDU apdu)
-    {
-        byte buffer[] = apdu.getBuffer();
+    public void process(APDU apdu) {
+        if (selectingApplet()) {
+            return;
+        }
 
-		short bytesRead = apdu.setIncomingAndReceive();
-		short echoOffset = (short)0;
+        counter++; // Incrementa o contador de APDUs
 
-		while ( bytesRead > 0 ) {
+        byte[] buffer = apdu.getBuffer();
+        short bytesRead = apdu.setIncomingAndReceive();
+        short echoOffset = 0;
+
+        // Recebe todos os dados
+        while (bytesRead > 0) {
             Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, echoBytes, echoOffset, bytesRead);
             echoOffset += bytesRead;
             bytesRead = apdu.receiveBytes(ISO7816.OFFSET_CDATA);
         }
 
+        // Aplica complemento binário (XOR com 0xFF)
+        for (short i = 0; i < echoOffset; i++) {
+            echoBytes[i] ^= (byte) 0xFF;
+        }
+
+        // Adiciona o contador no final
+        echoBytes[echoOffset] = (byte) (counter >> 8);         // byte mais significativo
+        echoBytes[(short)(echoOffset + 1)] = (byte) (counter); // byte menos significativo
+
+        // Envia os dados modificados + contador (2 bytes extra)
         apdu.setOutgoing();
-        apdu.setOutgoingLength( (short) (echoOffset + 5) );
-
-        // echo header
-        apdu.sendBytes( (short)0, (short) 5);
-        // echo data
-        apdu.sendBytesLong( echoBytes, (short) 0, echoOffset );
+        apdu.setOutgoingLength((short)(echoOffset + 2));
+        apdu.sendBytesLong(echoBytes, (short)0, (short)(echoOffset + 2));
     }
-
 }
+

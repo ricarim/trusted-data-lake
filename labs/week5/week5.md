@@ -27,16 +27,31 @@ Adicionalmente, criou-se o ***apdu script*** ```helloworld.apdu```:
 // test echo
 0x00 0x01 0x01 0x00 0x0d 0x48 0x65 0x6c 0x6c 0x6f 0x20 0x77 0x6f 0x72 0x6c 0x64 0x20 0x21 0x0d;
 ```
-Estre *script* foi então executado e enviou sequências de comandos ao simulador, que respondeu com os resultados esperados, incluindo a mensagem *"Hello World!"*. Obteve-se o seguinte resultado:
+Estre *script* foi então executado e enviou sequências de comandos ao simulador, que respondeu com os resultados esperados, incluindo a mensagem *"Hello World !"*. Obteve-se o seguinte resultado:
 
 ![exemplo_cli](images/exemplo_cli.png)
 
- O arquivo de configuração `jcardsim.cfg` foi utilizado para definir o **AID** (identificador) e a classe do applet a ser
-
 # Exercício 3
+
+## 3.1
 
 De modo a compilar o código do *applet* **Echo**, executou-se o seguinte:
 
-![echo_compiled](images/echo_compiled.png)
+``` bash
+$ javac -g -cp lib/api.jar -source 1.5 -target 1.5 Echo/Echo.java
+```
 
-Adicionalmente, para 
+Adicionalmente, o ficheiro *class* foi convertido para `.cap` da seguinte forma:
+
+![cap](images/cap.png)
+
+Finalmente, foi possível executar o *applet* no **jCardSim** utilizando o *script* `Echo.apdu`, o qual retornou a mensagem esperada *"Hello World !"*
+
+![echo](images/echo.png)
+
+## 3.2
+
+O próximo passo foi, então, modificar o ficheiro `Echo.java`, com o objetivo do *applet* manter o **número de APDU processadas** e devolva no R-APDU o **complemento binário dos dados que recebe**. 
+
+
+
