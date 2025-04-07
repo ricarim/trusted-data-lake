@@ -13,7 +13,7 @@ com.licel.jcardsim.card.applet.0.AID=010203040506070809
 com.licel.jcardsim.card.applet.0.Class=com.licel.jcardsim.samples.HelloWorldApplet
 ```
 
-Adicionalmente, criou-se o ***apdu script*** ```helloworld.apdu```:
+Adicionalmente, criou-se o ***script*** ```helloworld.apdu```:
 
 ``` java
 // CREATE APPLET CMD
@@ -33,25 +33,44 @@ Estre *script* foi então executado e enviou sequências de comandos ao simulado
 
 # Exercício 3
 
-## 3.1
+De modo a simular um **Java Card** e reresolver os exercícios propostos, criou-se um projeto `Maven` com a seguinte dependência:
 
-De modo a compilar o código do *applet* **Echo**, executou-se o seguinte:
-
-``` bash
-$ javac -g -cp lib/api.jar -source 1.5 -target 1.5 Echo/Echo.java
+``` xml
+<!-- https://mvnrepository.com/artifact/com.licel/jcardsim -->
+<dependency>
+    <groupId>com.licel</groupId>
+    <artifactId>jcardsim</artifactId>
+    <version>2.2.2</version>
+</dependency>
 ```
 
-Adicionalmente, o ficheiro *class* foi convertido para `.cap` da seguinte forma:
+Para além disso, para configurar o simulador, seguiu-se a documentação do [repositório oficial](https://github.com/licel/jcardsim).
 
-![cap](images/cap.png)
+## 3.1
 
-Finalmente, foi possível executar o *applet* no **jCardSim** utilizando o *script* `Echo.apdu`, o qual retornou a mensagem esperada *"Hello World !"*
+Ao executar o código do *applet* **Echo**, através do `Maven`, com o comando `run sim=App`, obteve-se o seguinte:
 
-![echo](images/echo.png)
+![echo1](images/echo1.png)
+
+A resposta (**R-ADPU**) obtida foi a esperada, já que é possível observar a mensagem *"Hello World !"* em hexadecimal.
+
+![hex1](images/hex1.png)
 
 ## 3.2
 
-O próximo passo foi, então, modificar o ficheiro `Echo.java`, com o objetivo do *applet* manter o **número de APDU processadas** e devolva no R-APDU o **complemento binário dos dados que recebe**. 
+O próximo passo foi, então, modificar o ficheiro `Echo.java`, com o objetivo do *applet* manter o **número de APDU processadas** e devolver na R-APDU o **complemento binário dos dados que recebe**. 
+
+Para isso, foi adicionado um `apduCounter` que incrementa a cada APDU processada e uma linha que executa a operação **XOR**  de cada *byte* com **=0XFF**:
+
+![xor](images/echo_XOR.png)
+
+Obteve-se o seguinte resultado:
+
+![echo2](images/echo2.png)
+
+A R-ADPU confirma-se pelo seguinte:
+
+![hex2](images/hex2.png)
 
 
 
