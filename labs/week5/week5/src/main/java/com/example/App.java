@@ -17,24 +17,32 @@ public class App
         /*System.out.println( "Hello World!" );*/
         Simulator simulator = new Simulator();
 
-        simulator.installApplet(AppletAID, Echo.class);
+        byte[] installData = new byte[] {
+            (byte) aid.length,       // AID length
+            // AID
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+            // PIN length
+            0x02,
+            // PIN bytes
+            0x12, 0x34
+        };
+
+        simulator.installApplet(AppletAID, Wallet.class,  installData, (short) 0, (byte) installData.length);
         simulator.selectApplet(AppletAID);
 
-        byte[] echoApdu = new byte[] {
-            (byte) 0x01, (byte) 0x01, (byte) 0x01, (byte) 0x00,
-            (byte) 0x0D, // Lc = 13 bytes
-            (byte) 0x48, (byte) 0x65, (byte) 0x6C, (byte) 0x6C, (byte) 0x6F,
-            (byte) 0x20, (byte) 0x77, (byte) 0x6F, (byte) 0x72, (byte) 0x6C,
-            (byte) 0x64, (byte) 0x20, (byte) 0x21
-        };
-        
-        byte[] response = simulator.transmitCommand(echoApdu);
-
-        System.out.print("R-APDU: ");
-        for (byte b : response) {
-            System.out.printf("%02X ", b);
-        }
+        send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x34 }); // Verifica PIN correto
+        send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credita 32
+        send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x10 }); // Debita 16
+        send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Ver saldo
+    }
+    private static void send(Simulator sim, byte[] command) {
+        System.out.print("=> ");
+        for (byte b : command) System.out.printf("%02X ", b);
         System.out.println();
 
+        byte[] resp = sim.transmitCommand(command);
+        System.out.print("<= ");
+        for (byte b : resp) System.out.printf("%02X ", b);
+        System.out.println("\n");
     }
 }
