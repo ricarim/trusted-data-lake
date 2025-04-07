@@ -7,6 +7,7 @@ public class Echo extends Applet
 {
     private byte[] echoBytes;
     private static final short LENGTH_ECHO_BYTES = 256;
+    private short apduCounter;
 
     /**
      * Only this class's install method should create the applet object.
@@ -14,6 +15,7 @@ public class Echo extends Applet
     protected Echo()
     {
         echoBytes = new byte[LENGTH_ECHO_BYTES];
+        apduCounter = 0;
         register();
     }
 
@@ -36,13 +38,18 @@ public class Echo extends Applet
      */
     public void process(APDU apdu)
     {
-        byte buffer[] = apdu.getBuffer();
+        apduCounter++;  
+        System.out.println("APDUs processadas: " + apduCounter);
 
+        byte buffer[] = apdu.getBuffer();
         short bytesRead = apdu.setIncomingAndReceive();
         short echoOffset = (short)0;
 
         while ( bytesRead > 0 ) {
-            Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, echoBytes, echoOffset, bytesRead);
+            //Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, echoBytes, echoOffset, bytesRead);
+            for (short i = 0; i < bytesRead; i++) {
+                echoBytes[echoOffset + i] = (byte) (buffer[ISO7816.OFFSET_CDATA + i] ^ (byte) 0xFF);
+            }
             echoOffset += bytesRead;
             bytesRead = apdu.receiveBytes(ISO7816.OFFSET_CDATA);
         }

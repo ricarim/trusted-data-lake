@@ -20,5 +20,21 @@ public class App
         simulator.installApplet(AppletAID, Echo.class);
         simulator.selectApplet(AppletAID);
 
+        byte[] echoApdu = new byte[] {
+            (byte) 0x01, (byte) 0x01, (byte) 0x01, (byte) 0x00,
+            (byte) 0x0D, // Lc = 13 bytes
+            (byte) 0x48, (byte) 0x65, (byte) 0x6C, (byte) 0x6C, (byte) 0x6F,
+            (byte) 0x20, (byte) 0x77, (byte) 0x6F, (byte) 0x72, (byte) 0x6C,
+            (byte) 0x64, (byte) 0x20, (byte) 0x21
+        };
+        
+        byte[] response = simulator.transmitCommand(echoApdu);
+
+        System.out.print("R-APDU: ");
+        for (byte b : response) {
+            System.out.printf("%02X ", b);
+        }
+        System.out.println();
+
     }
 }

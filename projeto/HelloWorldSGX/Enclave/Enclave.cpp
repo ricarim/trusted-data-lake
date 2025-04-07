@@ -2,7 +2,7 @@
 #include <stdio.h>  
 #include "Enclave_t.h"
 
-void printf(const char *fmt, ...)
+void enclave_printf(const char *fmt, ...)
 {
     char buf[BUFSIZ] = {'\0'};
     va_list ap;
@@ -13,7 +13,7 @@ void printf(const char *fmt, ...)
 }
 
 void ecall_entrypoint() {
-    printf("Hello from inside SGX Enclave!\n");
+    enclave_printf("Hello from inside SGX Enclave!\n");
 }
 
 
