@@ -110,9 +110,9 @@ Depois de analisar o *applet* foi verificado o que acontece quando se manda o PI
 
 ```java
 send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
-send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credita 32
-send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x0F }); // Debita 15
-send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Ver saldo
+send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credito
+send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x0F }); // Debito
+send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Saldo
 ```
 
 A resposta foi a seguinte:
@@ -126,10 +126,92 @@ final static short SW_VERIFICATION_FAILED = 0x6300;
 final static short SW_PIN_VERIFICATION_REQUIRED = 0x6301;
 ```
 
-De seguida, verificou-se o que acontece quando se manda várias vezes o PIN incorreto.
+De seguida, verificou-se o que acontece quando se manda várias vezes o PIN incorreto e de seguinda o PIN correto.
+
+No *applet* `Wallet.java` observou-se que o número limite de tentativas são 3 e que, após 3 tentativas erradas, o PIN bloqueia. 
+
+```java
+final static byte PIN_TRY_LIMIT = (byte)0x03;
+```
+
+```java
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x34 }); // Verifica PIN correto
+send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credito
+send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x0F }); // Debito
+send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Saldo
+```
 
 ![walletblocked](images/wallet_pin_blocked.png)
 
+Assim, com base nos resultados obtidos, podemos concluir que, após três tentativas falhadas do PIN - onde todas devolvem `63 00`, mesmo a mandar o PIN correto resultou, novamente, em `63 00`. Isto indica que o PIN foi bloqueado após o número máximo de tentativas incorretas.
 
+---
+
+Foi modificado o código do *applet* de forma a que a sua inicialização aceitasse um PUK e foi alterado o valor inicial de saldo para 100.
+
+```java	
+byte[] installData = new byte[] {
+    (byte) aid.length,       // AID length
+    // AID
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+    // PIN, PUK length
+    0x02, 0x02,
+    // balance
+    0x00, 0x64, // 100 
+    // PIN bytes
+    0x12, 0x34,
+    // PUK Bytes
+    0x56, 0x78
+};
+```
+
+Fizeram-se mais algumas alterações no código do *applet* `Wallet` para que o mesmo aceitasse o PUK e desbloqueasse o PIN. As principais alterações estão abaixo representadas e o código completo encontra-se em `Wallet.java`.
+
+```java
+final static byte UNBLOCK_PIN = (byte) 0x60;
+final static byte MAX_PUK_SIZE = (byte) 0x08;
+final static byte PUK_TRY_LIMIT = (byte) 0x03;
+
+OwnerPIN puk;
+
+puk = new OwnerPIN(PUK_TRY_LIMIT, MAX_PUK_SIZE);
+
+case UNBLOCK_PIN:
+    unblockPIN(apdu);
+    return;
+
+private void unblockPIN(APDU apdu) {
+    byte[] buffer = apdu.getBuffer();
+    byte len = (byte)(apdu.setIncomingAndReceive());
+
+    if (!puk.check(buffer, ISO7816.OFFSET_CDATA, len)) {
+        ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+    }
+    pin.resetAndUnblock();
+}
+```
+
+Após as alterações do *applet* `Wallet` compilou-se e executou-se o código - vai-se mandar 3 vezes o PIN incorreto, depois o PIN correto para se verificar que está bloqueado, o desbloqueio com o PUK, e por fim, o PIN correto para se verificar que o desbloqueio funcionou.
+
+```java
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN incorreto
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x34 }); // Verifica PIN correto
+send(simulator, new byte[] { 0x50, 0x60, 0x00, 0x00, 0x02, 0x56, 0x78 }); // Desbloqueio com PUK
+send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x34 }); // Verifica PIN correto
+send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credito
+send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x0F }); // Debito
+send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Saldo
+```
+
+O resultado foi o seguinte:
+
+![walletpuk](images/wallet_puk.png)
+
+Conseguimos observar que o resultado é `90 00`, que era o resultado certo que dava inicialmente.
 
 
