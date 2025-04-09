@@ -1,17 +1,9 @@
 # Exercício 1
 
-Foi criado o ficheiro `RandomApplet.java` que contém a implementação de um gerador de números aleatórios. Este gerador é capaz de gerar números aleatórios seguros e pseudo-aleatórios. O código do gerador é o seguinte:
+Foi criado o ficheiro `RandomApplet.java` que contém a implementação de um gerador de números aleatórios.
 
 
-Durante a instalação do *applet*, é possível definir o tipo de gerador de dados aleatórios que vai ser utilizado. Este parâmetro é recebido no `bArray`, que contém os dados fornecidos no momento da instalação do applet.
-
-O primeiro byte deste array (param) é interpretado para decidir qual tipo de gerador utilizar:
-
-Se o valor de param for 1, o applet é configurado para utilizar o gerador pseudoaleatório, designado por RandomData.ALG_PSEUDO_RANDOM.
-
-Caso contrário — por exemplo, se o valor for 0 — o applet utiliza o gerador aleatório seguro, representado por RandomData.ALG_SECURE_RANDOM.
-
-Este mecanismo torna o applet flexível, permitindo que o comportamento do gerador de aleatoriedade seja definido dinamicamente no momento da sua instalação
+Durante a instalação do *applet*, é possível definir o tipo de gerador de dados aleatórios que vai ser utilizado. Se o valor de `param` for 1, o *applet* é configurado para utilizar o gerador pseudoaleatório - `RandomData.ALG_PSEUDO_RANDOM`. Caso contrário, se o valor for 0, o *applet* vai utilizar o gerador aleatório seguro - `RandomData.ALG_SECURE_RANDOM`. Assim, tornou-se o *applet* flexível ao permitir que o comportamento do gerador de aleatoriedade seja definido dinamicamente no momento da sua instalação.
 
 ```java
 byte algType = RandomData.ALG_SECURE_RANDOM;
