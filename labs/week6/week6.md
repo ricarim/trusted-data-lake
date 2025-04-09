@@ -83,3 +83,60 @@ Os resultados obtidos foram:
 Apesar da diversidade dos testes, não foram observadas diferenças visíveis entre os dois geradores. Em ambos os casos, os dados retornados parecem aleatórios e não apresentam repetições ou padrões.
 
 Assim, conclui-se que, no contexto da simulação e com os testes realizados, o comportamento dos dois geradores foi semelhante. 
+
+# Exercício 2
+
+Inicialmente foi corrido o código `DESApplet.java` e o resultado foi o seguinte:
+
+![DESApplet](images/run_inicial.png)
+
+## a)
+
+Foi analisado o código do `DESApplet.java`. Concluiu-se que reservar espaço para o output das operações como um novo em EPROM `outBuff= newbyte[Lc];` não é a melhor prática em JavaCard. 
+
+Primeiramente, a alocação de arrays através do `new byte[Lc]` cria dados persistentes, é significativamente mais lento que a RAM e só podem ser escritos/apagados um número limitado de vezes. Esta memória foi projetada para armazenar dados permanentes e não temporários. Ao armazenar resultados voláteis como encriptações/desencriptações pode levar a degradação do desempenho e do cartão e possível exposição dos dados a riscos de segurança, uma vez que a memória persistente mantém os dados após a execução.
+
+Da mesma forma, a alocação dinâmica de *arrays* durante a execução pode falhar, porque alguns cartões JavaCard impõem restrições à alocação de memória após a instalação (*post-issuance memory allocation*), o que faz com que esta implementação não seja suportada. Existe, também, o risco de exceções na execução (`SystemException.NO_RESOURCE`), caso a memória esteja fragmentada ou não esteja disponível. 
+
+Assim, a utilização do `new byte[Lc]` deve ser evitada. A abordagem recomendada consiste em utilizar o *buffer* temporário do APDU `apdu.getBuffer()`, que é guardado em memória RAM.
+
+A proposta de correção é a seguinte:
+
+```java
+private void encryptDES(APDU apdu){
+    byte[] buf = apdu.getBuffer();
+
+    short dataLen = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
+
+    // initialize cipher
+    cipher.init(desKey, Cipher.MODE_ENCRYPT);
+    
+    short outLen = cipher.doFinal(buf, ISO7816.OFFSET_CDATA, dataLen, buf, (short) 0);
+
+    // set output to be returned with same size of the input
+    apdu.setOutgoing();
+    apdu.setOutgoingLength(outLen);
+    apdu.sendBytes((short) 0, outLen);
+}
+
+private void decryptDES(APDU apdu) {
+    byte[] buf = apdu.getBuffer();
+    
+    short dataLen = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
+
+    // initialize cipher 
+    cipher.init(desKey, Cipher.MODE_DECRYPT);
+
+    short outLen = cipher.doFinal(buf, ISO7816.OFFSET_CDATA, dataLen, buf, (short) 0);
+
+    // set output to be returned with same size of the input
+    apdu.setOutgoing();
+    apdu.setOutgoingLength(outLen);
+    apdu.sendBytes((short) 0, outLen);
+}
+```
+
+## b)
+
+
+
