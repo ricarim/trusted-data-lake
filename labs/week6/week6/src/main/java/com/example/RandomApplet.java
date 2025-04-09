@@ -10,8 +10,14 @@ public class RandomApplet extends Applet {
     private RandomData randomGenerator;
 
     private RandomApplet(byte algType) {
-        // Inicializa o gerador aleatório tendo em conta o tipo
-        randomGenerator = RandomData.getInstance(algType);
+        try {
+            randomGenerator = RandomData.getInstance(algType);
+        } catch (CryptoException e) {
+            if (e.getReason() == CryptoException.NO_SUCH_ALGORITHM) {
+                ISOException.throwIt(ISO7816.SW_FUNC_NOT_SUPPORTED);
+            }
+            throw e;
+        }   
         register();
     }
 
