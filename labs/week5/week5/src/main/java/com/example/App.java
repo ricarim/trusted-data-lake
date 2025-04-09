@@ -3,10 +3,6 @@ package com.example;
 import com.licel.jcardsim.base.Simulator;
 import javacard.framework.*;
 
-/**
- * Hello world!
- *
- */
 public class App 
 {
 
@@ -14,7 +10,6 @@ public class App
     private static final AID AppletAID = new AID(aid, (short) 0, (byte) aid.length);
     public static void main( String[] args )
     {
-        /*System.out.println( "Hello World!" );*/
         Simulator simulator = new Simulator();
 
         byte[] installData = new byte[] {
