@@ -46,7 +46,6 @@ public class Echo extends Applet
         short echoOffset = (short)0;
 
         while ( bytesRead > 0 ) {
-            //Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, echoBytes, echoOffset, bytesRead);
             for (short i = 0; i < bytesRead; i++) {
                 echoBytes[echoOffset + i] = (byte) (buffer[ISO7816.OFFSET_CDATA + i] ^ (byte) 0xFF);
             }

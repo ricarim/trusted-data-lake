@@ -58,7 +58,7 @@ public class Wallet extends Applet {
     /* instance variables declaration */
     OwnerPIN pin;
     OwnerPIN puk;
-    short balance; // two bytes... Max 16384
+    short balance;
     
     private Wallet (byte[] bArray,short bOffset,byte bLength) {
       
