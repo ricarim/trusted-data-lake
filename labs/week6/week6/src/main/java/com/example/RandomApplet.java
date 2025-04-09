@@ -1,7 +1,7 @@
 package com.example;
 
 import javacard.framework.*;
-import javacard.security.RandomData;
+import javacard.security.*;
 
 public class RandomApplet extends Applet {
 
