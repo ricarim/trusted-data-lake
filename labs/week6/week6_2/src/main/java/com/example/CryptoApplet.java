@@ -102,7 +102,6 @@ public class CryptoApplet extends Applet {
     }
 
 
-
     private void loadKey(APDU apdu) {
         byte[] buf = apdu.getBuffer();
         short lc = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);

@@ -43,8 +43,9 @@ public class App {
         };
 
         byte[] adminDESKey = {
-            (byte) 0x01, (byte) 0x23, (byte) 0x45, (byte) 0x67,
-            (byte) 0x89, (byte) 0xAB, (byte) 0xCD, (byte) 0xEF
+            (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04,
+            (byte) 0x05, (byte) 0x06, (byte) 0x07, (byte) 0x08
+
         };
 
         byte[] challenge = new byte[16];
@@ -63,12 +64,7 @@ public class App {
         byte[] plaintext;
 
         if (algorithm == ALG_AES_ECB) {
-            keyToProvision = new byte[]{
-                (byte) 0x10, (byte) 0x20, (byte) 0x30, (byte) 0x40,
-                (byte) 0x50, (byte) 0x60, (byte) 0x70, (byte) 0x80,
-                (byte) 0x90, (byte) 0xA0, (byte) 0xB0, (byte) 0xC0,
-                (byte) 0xD0, (byte) 0xE0, (byte) 0xF0, (byte) 0x00
-            };
+            keyToProvision = adminAESKey;
             plaintext = new byte[]{
                 (byte) 0x41, (byte) 0x42, (byte) 0x43, (byte) 0x44,
                 (byte) 0x45, (byte) 0x46, (byte) 0x47, (byte) 0x48,
