@@ -3,18 +3,16 @@ package com.example;
 import com.licel.jcardsim.base.Simulator;
 import javacard.framework.*;
 
-public class App 
-{
+public class App {
 
     private static final byte[] aid = { (byte) 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
     private static final AID AppletAID = new AID(aid, (short) 0, (byte) aid.length);
-    public static void main( String[] args )
-    {
+
+    public static void main( String[] args ) {
         Simulator simulator = new Simulator();
 
-
         // Param: 1 = PSEUDO_RANDOM, 0 = SECURE_RANDOM
-        byte[] installParam = { 0 }; // ou { 0 }
+        byte[] installParam = { 0 };
         simulator.installApplet(AppletAID, RandomApplet.class, installParam, (short) 0, (byte) installParam.length);
         simulator.selectApplet(AppletAID);
 
@@ -45,8 +43,8 @@ public class App
         send(simPseudo, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x0A });
         send(simPseudo, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x0A });
         send(simPseudo, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x0A });
-
     }
+
     private static void send(Simulator sim, byte[] command) {
         System.out.print("=> ");
         for (byte b : command) System.out.printf("%02X ", b);

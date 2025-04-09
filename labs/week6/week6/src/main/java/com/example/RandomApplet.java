@@ -10,14 +10,12 @@ public class RandomApplet extends Applet {
     private RandomData randomGenerator;
 
     private RandomApplet(byte algType) {
-        // Inicializa gerador aleatório conforme tipo
+        // Inicializa o gerador aleatório tendo em conta o tipo
         randomGenerator = RandomData.getInstance(algType);
         register();
     }
 
-    // Método de instalação chamado pela JCRE
     public static void install(byte[] bArray, short bOffset, byte bLength) {
-        // Pode usar um parâmetro de instalação para escolher tipo de gerador
         byte algType = RandomData.ALG_SECURE_RANDOM;
 
         if (bLength > 0) {
