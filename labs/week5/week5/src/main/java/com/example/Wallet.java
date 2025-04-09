@@ -23,6 +23,7 @@ public class Wallet extends Applet {
     final static byte CREDIT = (byte) 0x30;
     final static byte DEBIT = (byte) 0x40;
     final static byte GET_BALANCE = (byte) 0x50;
+    final static byte UNBLOCK_PIN = (byte) 0x60;
     
     // maximum balance
     final static short MAX_BALANCE = 0x7FFF;
@@ -34,10 +35,13 @@ public class Wallet extends Applet {
     final static byte PIN_TRY_LIMIT =(byte)0x03;
     // maximum size PIN
     final static byte MAX_PIN_SIZE =(byte)0x08;
+
+    final static byte MAX_PUK_SIZE = (byte) 0x08;
+    final static byte PUK_TRY_LIMIT = (byte) 0x03;
     
     // signal that the PIN verification failed
-    final static short SW_VERIFICATION_FAILED =
-    0x6300;
+    final static short SW_VERIFICATION_FAILED = 0x6300;
+
     // signal the the PIN validation is required
     // for a credit or a debit transaction
     final static short SW_PIN_VERIFICATION_REQUIRED =
@@ -53,6 +57,7 @@ public class Wallet extends Applet {
     
     /* instance variables declaration */
     OwnerPIN pin;
+    OwnerPIN puk;
     short balance; // two bytes... Max 16384
     
     private Wallet (byte[] bArray,short bOffset,byte bLength) {
@@ -61,6 +66,7 @@ public class Wallet extends Applet {
         // all the memory that an applet needs during
         // its lifetime inside the constructor
         pin = new OwnerPIN(PIN_TRY_LIMIT,   MAX_PIN_SIZE);
+        puk = new OwnerPIN(PUK_TRY_LIMIT, MAX_PUK_SIZE);
 
         
         // The installation parameters contain the PIN
@@ -74,12 +80,23 @@ public class Wallet extends Applet {
         // byte aLen = bArray[bOffset]; // applet data length                                                                                                                                                                                 
         // pin.update(bArray, (short) (bOffset + 1), aLen);                                                                                                                                                                                   
 
-        // For jcardsim                                                                                                                                                                                                                        
-        byte iLen = bArray[bOffset]; // aid length                                                                                                                                                                                            
-		//System.out.println("bOffset = "+bOffset);                                                                                                                                                                                           
-        bOffset = (short) (bOffset+iLen+1);
-        byte cLen = bArray[bOffset]; // info length (Pin Length)                                                                                                                                                                              
-        pin.update(bArray, (short) (bOffset+1), cLen);
+        byte aidLen = bArray[bOffset]; 
+        bOffset = (short) (bOffset + 1 + aidLen);
+
+        byte pinLen = bArray[bOffset++];
+        byte pukLen = bArray[bOffset++];
+        byte saldoHi = bArray[bOffset++];
+        byte saldoLo = bArray[bOffset++];
+
+        pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
+        puk = new OwnerPIN(PUK_TRY_LIMIT, MAX_PUK_SIZE);
+
+        pin.update(bArray, bOffset, pinLen);
+        bOffset += pinLen;
+        puk.update(bArray, bOffset, pukLen);
+
+        balance = Util.makeShort(saldoHi, saldoLo);
+
 
         register();
     
@@ -146,6 +163,9 @@ public class Wallet extends Applet {
             return;
         case VERIFY:
             verify(apdu);
+            return;
+        case UNBLOCK_PIN:
+            unblockPIN(apdu);
             return;
         default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -270,6 +290,16 @@ public class Wallet extends Applet {
             ISOException.throwIt(SW_VERIFICATION_FAILED);
         
     } // end of validate method
+
+    private void unblockPIN(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        byte len = (byte)(apdu.setIncomingAndReceive());
+
+        if (!puk.check(buffer, ISO7816.OFFSET_CDATA, len)) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+        pin.resetAndUnblock();
+    }
 } // end of class Wallet
 
 
