@@ -21,18 +21,23 @@ public class App
             (byte) aid.length,       // AID length
             // AID
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
-            // PIN length
-            0x02,
+            // PIN, PUCK length
+            0x02, 0x02,
             // PIN bytes
-            0x12, 0x34
+            0x12, 0x34,
+            // PUCK Bytes
+            0x56, 0x78
         };
 
         simulator.installApplet(AppletAID, Wallet.class,  installData, (short) 0, (byte) installData.length);
         simulator.selectApplet(AppletAID);
 
+        send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN correto
+        send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN correto
+        send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x35 }); // Verifica PIN correto
         send(simulator, new byte[] { 0x50, 0x20, 0x00, 0x00, 0x02, 0x12, 0x34 }); // Verifica PIN correto
         send(simulator, new byte[] { 0x50, 0x30, 0x00, 0x00, 0x01, 0x20 }); // Credita 32
-        send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x10 }); // Debita 16
+        send(simulator, new byte[] { 0x50, 0x40, 0x00, 0x00, 0x01, 0x0F }); // Debita 15
         send(simulator, new byte[] { 0x50, 0x50, 0x00, 0x00, 0x00 });       // Ver saldo
     }
     private static void send(Simulator sim, byte[] command) {
