@@ -1,0 +1,21 @@
+healthcare_number,name,age,gender,admission_date,discharge_date,diagnosis
+766988943,João Silva,85,F,2025-03-06,2025-03-10,Flu
+542311708,Ana Costa,73,M,2025-03-11,2025-03-19,Pneumonia
+188378287,Carla Lima,40,M,2025-02-26,2025-03-05,Hypertension
+357148181,Pedro Rocha,64,F,2025-01-17,2025-01-20,Pneumonia
+772519287,Luís Almeida,36,M,2025-01-08,2025-01-11,Anemia
+288672267,Sofia Martins,59,M,2025-03-26,2025-03-28,Pneumonia
+244888527,Rita Nunes,46,F,2025-03-16,2025-03-18,Pneumonia
+296824830,Miguel Santos,23,F,2025-03-09,2025-03-16,Type 2 Diabetes
+439794808,Paula Dias,24,M,2025-01-14,2025-01-24,Flu
+851507966,Bruno Teixeira,53,F,2025-03-17,2025-03-27,Anemia
+705427203,Helena Pires,29,F,2025-01-20,2025-01-28,Hepatitis
+494739331,Carlos Gomes,84,F,2025-03-02,2025-03-07,Hypertension
+687107151,Laura Ferreira,47,M,2025-02-25,2025-03-01,Arthritis
+735556654,Tiago Mendes,61,M,2025-01-10,2025-01-15,Flu
+291997406,Beatriz Ramos,66,F,2025-03-02,2025-03-07,Femur Fracture
+610033137,André Lopes,49,M,2025-03-16,2025-03-25,Pneumonia
+494316089,Inês Carvalho,40,M,2025-03-13,2025-03-17,Femur Fracture
+235092864,Ricardo Matos,43,F,2025-01-25,2025-02-02,Femur Fracture
+304218716,Marta Sousa,62,F,2025-01-10,2025-01-16,Kidney Failure
+313510163,Daniel Faria,45,M,2025-02-17,2025-02-26,Hepatitis
