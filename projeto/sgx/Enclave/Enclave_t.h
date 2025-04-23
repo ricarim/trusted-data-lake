@@ -15,10 +15,7 @@
 extern "C" {
 #endif
 
-sgx_status_t ecall_generate_rsa_key_pair(void);
-sgx_status_t ecall_get_rsa_pubkey(uint8_t* mod, size_t mod_len, uint8_t* exp, size_t exp_len);
-sgx_status_t ecall_rsa_decrypt(const uint8_t* enc_data, size_t enc_len, uint8_t* output, size_t output_size, size_t* decrypted_len);
-sgx_status_t ecall_rsa_sign(const uint8_t* data, size_t data_len, uint8_t* signature, size_t sig_len);
+sgx_status_t ecall_verify_signature(uint8_t* data, size_t data_len, uint8_t* signature, size_t sig_len, int signer_type, int* is_valid);
 
 sgx_status_t SGX_CDECL ocall_printf(const char* str);
 

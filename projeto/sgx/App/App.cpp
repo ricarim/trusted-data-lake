@@ -58,6 +58,27 @@ char* download_csv(const char* gcs_uri, const char* local_file) {
     return encrypted_data;
 }
 
+bool upload_to_gcs(const char* local_file, const char* gcs_uri) {
+    if (!local_file || !gcs_uri) {
+        fprintf(stderr, "Invalid arguments to upload_to_gcs()\n");
+        return false;
+    }
+
+    char command[512];
+    snprintf(command, sizeof(command), "gsutil cp %s %s", local_file, gcs_uri);
+
+    printf("Uploading file to GCS: %s\n", gcs_uri);
+    int ret = system(command);
+
+    if (ret != 0) {
+        fprintf(stderr, "Upload failed: %s\n", gcs_uri);
+        return false;
+    }
+
+    printf("Upload successful: %s\n", gcs_uri);
+    return true;
+}
+
 const char* encrypted_hospital_csv = "<encrypted_hospital_data_placeholder>";
 const char* encrypted_lab_csv = "<encrypted_lab_data_placeholder>";
 

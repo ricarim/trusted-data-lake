@@ -1,13 +1,13 @@
 enclave {
     trusted {
-        public sgx_status_t ecall_generate_rsa_key_pair();
-        public sgx_status_t ecall_get_rsa_pubkey([out, size=mod_len] uint8_t* mod, size_t mod_len,
-                                                 [out, size=exp_len] uint8_t* exp, size_t exp_len);
-        public sgx_status_t ecall_rsa_decrypt([in, size=enc_len] const uint8_t* enc_data, size_t enc_len,
-                                              [out, size=output_size] uint8_t* output, size_t output_size,
-                                              [out] size_t* decrypted_len);
-        public sgx_status_t ecall_rsa_sign([in, size=data_len] const uint8_t* data, size_t data_len,
-                                           [out, size=sig_len] uint8_t* signature, size_t sig_len);
+        public sgx_status_t ecall_verify_signature(
+            [in, size=data_len] uint8_t* data,
+            size_t data_len,
+            [in, size=sig_len] uint8_t* signature,
+            size_t sig_len,
+            int signer_type,
+            [out] int* is_valid
+             );
     };
 
     untrusted {
