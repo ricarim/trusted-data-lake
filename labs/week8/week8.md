@@ -58,6 +58,8 @@ Para além disso, ao separar a lógica do "negócio" do ambiente de execução s
 
 Por fim, outro benefício importante é a redução da complexidade inicial do projeto, já que as APIs e requisitos de segurança das tecnologias de *hardware* confiável costumam ser complexos e exigem cuidados específicos. 
 
+ola ola
+
 ## Exercício 6)
 
 ### a)
