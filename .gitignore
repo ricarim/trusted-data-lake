@@ -1,1 +1,5 @@
 projeto/google-cloud-sdk/
+
+projeto/*.o
+projeto/sgx/App/Enclave_u.c
+projeto/sgx/App/Enclave_u.h
