@@ -10,21 +10,24 @@ import java.util.Scanner;
 
 public class App {
 
+    // AID used to identify the applet
     private static final byte[] AID_BYTES = {
         (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04, (byte) 0x05,
         (byte) 0x06, (byte) 0x07, (byte) 0x08, (byte) 0x09, (byte) 0x02
     };
 
+    // Algorithm identifiers
     private static final byte ALG_DES_ECB = (byte) 0x01;
-    private static final byte ALG_AES_ECB = (byte) 0x02; // <- Atualizado
+    private static final byte ALG_AES_ECB = (byte) 0x02; 
 
     public static void main(String[] args) throws Exception {
+        // Initialize simulator and applet
         Simulator simulator = new Simulator();
         AID appletAID = new AID(AID_BYTES, (short) 0, (byte) AID_BYTES.length);
-
         simulator.installApplet(appletAID, CryptoApplet.class);
         simulator.selectApplet(appletAID);
 
+        // Choose algorithm
         Scanner scanner = new Scanner(System.in);
         System.out.println("=== Select the algorithm ===");
         System.out.println("1 - DES/ECB");
@@ -35,6 +38,7 @@ public class App {
         byte algorithm = (choice == 1) ? ALG_DES_ECB : ALG_AES_ECB;
         System.out.println("Selected algorithm: " + (algorithm == ALG_DES_ECB ? "DES/ECB" : "AES/ECB"));
 
+        // Admin keys
         byte[] adminAESKey = {
             (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04,
             (byte) 0x05, (byte) 0x06, (byte) 0x07, (byte) 0x08,
@@ -45,45 +49,46 @@ public class App {
         byte[] adminDESKey = {
             (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04,
             (byte) 0x05, (byte) 0x06, (byte) 0x07, (byte) 0x08
-
         };
 
-        byte[] challenge = new byte[16];
-        for (int i = 0; i < challenge.length; i++) challenge[i] = (byte) i;
+        // Provision key based on algorithm
+        byte[] keyToProvision = (algorithm == ALG_AES_ECB) ? adminAESKey : adminDESKey;
+        sendAPDU(simulator, (byte) 0x20, algorithm, (byte) 0x00, keyToProvision, "Provision key");
 
-        byte[] encryptedChallenge;
-        if (algorithm == ALG_AES_ECB) {
-            encryptedChallenge = aesEncrypt(adminAESKey, challenge);
-        } else {
-            encryptedChallenge = desEncrypt(adminDESKey, Arrays.copyOf(challenge, 8));
-        }
+        // Challenge expected by applet
+        byte[] challenge = {
+            (byte) 0x90, (byte) 0x15, (byte) 0x2A, (byte) 0x4C,
+            (byte) 0x1C, (byte) 0xF4, (byte) 0x27, (byte) 0x80,
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00
+        };
+
+        // Encrypt challenge with corresponding key
+        byte[] encryptedChallenge = (algorithm == ALG_AES_ECB)
+                ? aesEncrypt(adminAESKey, challenge)
+                : desEncrypt(adminDESKey, Arrays.copyOf(challenge, 8));
 
         sendAPDU(simulator, (byte) 0x10, algorithm, (byte) 0x00, encryptedChallenge, "Authentication");
 
-        byte[] keyToProvision;
-        byte[] plaintext;
+        // Define plaintext to encrypt
+        byte[] plaintext = (algorithm == ALG_AES_ECB)
+                ? new byte[]{
+                    (byte) 0x41, (byte) 0x42, (byte) 0x43, (byte) 0x44,
+                    (byte) 0x45, (byte) 0x46, (byte) 0x47, (byte) 0x48,
+                    (byte) 0x49, (byte) 0x4A, (byte) 0x4B, (byte) 0x4C,
+                    (byte) 0x4D, (byte) 0x4E, (byte) 0x4F, (byte) 0x50
+                }
+                : new byte[]{
+                    (byte) 0x41, (byte) 0x42, (byte) 0x43, (byte) 0x44,
+                    (byte) 0x45, (byte) 0x46, (byte) 0x47, (byte) 0x48
+                };
 
-        if (algorithm == ALG_AES_ECB) {
-            keyToProvision = adminAESKey;
-            plaintext = new byte[]{
-                (byte) 0x41, (byte) 0x42, (byte) 0x43, (byte) 0x44,
-                (byte) 0x45, (byte) 0x46, (byte) 0x47, (byte) 0x48,
-                (byte) 0x49, (byte) 0x4A, (byte) 0x4B, (byte) 0x4C,
-                (byte) 0x4D, (byte) 0x4E, (byte) 0x4F, (byte) 0x50
-            };
-        } else {
-            keyToProvision = adminDESKey;
-            plaintext = new byte[]{
-                (byte) 0x41, (byte) 0x42, (byte) 0x43, (byte) 0x44,
-                (byte) 0x45, (byte) 0x46, (byte) 0x47, (byte) 0x48
-            };
-        }
-
-        sendAPDU(simulator, (byte) 0x20, algorithm, (byte) 0x00, keyToProvision, "Provision key");
+        // Encrypt and then decrypt the data
         byte[] ciphertext = sendAPDU(simulator, (byte) 0x30, algorithm, (byte) 0x00, plaintext, "Encrypt data");
         sendAPDU(simulator, (byte) 0x40, algorithm, (byte) 0x00, ciphertext, "Decrypt data");
     }
 
+    // Sends APDU to the simulator and prints the result
     private static byte[] sendAPDU(Simulator simulator, byte ins, byte p1, byte p2, byte[] data, String label) {
         byte[] apdu = new byte[5 + data.length];
         apdu[0] = (byte) 0x00;
@@ -106,11 +111,13 @@ public class App {
         return Arrays.copyOf(response, response.length - 2); // remove status word
     }
 
+    // Prints data in hexadecimal
     private static void printHex(byte[] data) {
         for (byte b : data) System.out.printf("%02X ", b);
         System.out.println();
     }
 
+    // Encrypts data with AES/ECB/NoPadding
     private static byte[] aesEncrypt(byte[] key, byte[] data) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
         SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
@@ -118,6 +125,7 @@ public class App {
         return cipher.doFinal(data);
     }
 
+    // Encrypts data with DES/ECB/NoPadding
     private static byte[] desEncrypt(byte[] key, byte[] data) throws Exception {
         Cipher cipher = Cipher.getInstance("DES/ECB/NoPadding");
         SecretKeySpec keySpec = new SecretKeySpec(key, "DES");

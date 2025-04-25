@@ -6,44 +6,46 @@ import javacardx.crypto.*;
 
 public class CryptoApplet extends Applet {
 
-    // INS codes
-    private static final byte INS_AUTHENTICATE      = (byte) 0x10;
-    private static final byte INS_LOAD_KEY          = (byte) 0x20;
-    private static final byte INS_ENCRYPT           = (byte) 0x30;
-    private static final byte INS_DECRYPT           = (byte) 0x40;
+    // Instruction bytes for APDU commands
+    private static final byte INS_AUTHENTICATE = (byte) 0x10;
+    private static final byte INS_PROVISION_KEY = (byte) 0x20;
+    private static final byte INS_ENCRYPT = (byte) 0x30;
+    private static final byte INS_DECRYPT = (byte) 0x40;
 
-    // Algorithm IDs
-    private static final byte ALG_DES_ECB           = (byte) 0x01;
-    private static final byte ALG_AES_ECB           = (byte) 0x02;
+    // Supported algorithms
+    private static final byte ALG_DES_ECB = (byte) 0x01;
+    private static final byte ALG_AES_ECB = (byte) 0x02;
 
-    // State
-    private boolean isAuthenticated = false;
-
-    // Keys
-    private AESKey aesKey;
-    private DESKey desKey;
-
-    // Admin key for authentication (hardcoded for example)
-    private final byte[] adminKeyBytes = {
-        (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04,
-        (byte)0x05, (byte)0x06, (byte)0x07, (byte)0x08,
-        (byte)0x09, (byte)0x0A, (byte)0x0B, (byte)0x0C,
-        (byte)0x0D, (byte)0x0E, (byte)0x0F, (byte)0x10
-    };
-    private AESKey adminKey;
+    // Crypto engine and keys
     private Cipher cipher;
+    private DESKey desKey;
+    private AESKey aesKey;
 
-    // Buffers
-    private byte[] bufferRAM;
+    private byte selectedAlgorithm;
+    private boolean isAuthenticated;
 
-    protected CryptoApplet() {
+    // Temporary buffer for crypto results
+    private byte[] tempBuffer;
+
+    // Fixed challenge expected in authentication
+    private final byte[] adminChallenge = {
+        (byte) 0x90, (byte) 0x15, (byte) 0x2A, (byte) 0x4C,
+        (byte) 0x1C, (byte) 0xF4, (byte) 0x27, (byte) 0x80
+    };
+
+    private CryptoApplet() {
+        // Create a transient buffer in RAM, cleared on deselect
+        tempBuffer = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
+
+        // Initialize keys for DES and AES
         desKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES, false);
         aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
-        adminKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
-        adminKey.setKey(adminKeyBytes, (short) 0);
 
-        bufferRAM = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
+        cipher = null;
+        selectedAlgorithm = 0;
+        isAuthenticated = false;
 
+        // Register this applet instance
         register();
     }
 
@@ -52,131 +54,116 @@ public class CryptoApplet extends Applet {
     }
 
     public void process(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+
         if (selectingApplet()) return;
 
-        byte[] buffer = apdu.getBuffer();
         byte ins = buffer[ISO7816.OFFSET_INS];
+        byte p1 = buffer[ISO7816.OFFSET_P1];
+        short lc = (short) (buffer[ISO7816.OFFSET_LC] & 0xFF);
+        short dataOffset = ISO7816.OFFSET_CDATA;
 
+        // Dispatch based on instruction
         switch (ins) {
             case INS_AUTHENTICATE:
-                authenticate(apdu);
+                authenticate(p1, buffer, dataOffset, lc);
                 break;
-            case INS_LOAD_KEY:
-                loadKey(apdu);
+            case INS_PROVISION_KEY:
+                provisionKey(p1, buffer, dataOffset, lc);
                 break;
             case INS_ENCRYPT:
-                encrypt(apdu);
+                encrypt(p1, buffer, dataOffset, lc);
                 break;
             case INS_DECRYPT:
-                decrypt(apdu);
+                decrypt(p1, buffer, dataOffset, lc);
                 break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
         }
     }
 
-    private void authenticate(APDU apdu) {
-        byte[] buf = apdu.getBuffer();
-        short lc = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
-        byte alg = buf[ISO7816.OFFSET_P1];
-
-        switch (alg) {
-            case ALG_AES_ECB:
-                cipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
-                cipher.init(adminKey, Cipher.MODE_DECRYPT);
-                break;
-            case ALG_DES_ECB:
-                cipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
-                cipher.init(desKey, Cipher.MODE_DECRYPT);
-                break;
-            default:
-                ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+    // Handles authentication by decrypting a challenge and comparing with adminChallenge
+    private void authenticate(byte algorithm, byte[] buffer, short offset, short length) {
+        // Validate input length
+        if ((algorithm == ALG_DES_ECB && length < 8) || (algorithm == ALG_AES_ECB && length < 16)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
 
-        try {
-            cipher.doFinal(buf, ISO7816.OFFSET_CDATA, lc, bufferRAM, (short) 0);
+        // Initialize cipher with correct algorithm
+        Cipher authCipher;
+        if (algorithm == ALG_DES_ECB) {
+            authCipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
+            authCipher.init(desKey, Cipher.MODE_DECRYPT);
+        } else if (algorithm == ALG_AES_ECB) {
+            authCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
+            authCipher.init(aesKey, Cipher.MODE_DECRYPT);
+        } else {
+            ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+            return;
+        }
+
+        // Decrypt the input and store the result in tempBuffer
+        authCipher.doFinal(buffer, offset, length, tempBuffer, (short) 0);
+
+        // Compare the first 8 bytes to adminChallenge
+        if (Util.arrayCompare(tempBuffer, (short) 0, adminChallenge, (short) 0, (short) 8) == 0) {
             isAuthenticated = true;
-        } catch (CryptoException e) {
+        } else {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
     }
 
-
-    private void loadKey(APDU apdu) {
-        byte[] buf = apdu.getBuffer();
-        short lc = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
-        byte alg = buf[ISO7816.OFFSET_P1];
-
-        switch (alg) {
-            case ALG_AES_ECB:
-                if (lc != 16) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-                adminKey.setKey(buf, ISO7816.OFFSET_CDATA);
-                break;
-            case ALG_DES_ECB:
-                if (lc != 8) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-                desKey.setKey(buf, ISO7816.OFFSET_CDATA);
-                break;
-            default:
-                ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+    // Allows the provisioning of keys for encryption/decryption
+    private void provisionKey(byte algorithm, byte[] buffer, short offset, short length) {
+        // No authentication required for initial key setup
+        if (algorithm == ALG_DES_ECB) {
+            if (length != 8)
+                ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+            desKey.setKey(buffer, offset);
+        } else if (algorithm == ALG_AES_ECB) {
+            if (length != 16)
+                ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+            aesKey.setKey(buffer, offset);
+        } else {
+            ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
         }
     }
 
-
-    private void encrypt(APDU apdu) {
-        byte[] buf = apdu.getBuffer();
-        byte alg = buf[ISO7816.OFFSET_P1];
-        short lc = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
-
-        switch (alg) {
-            case ALG_DES_ECB:
-                if (lc % 8 != 0) {
-                    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH); // Error: must be a multiple of 8
-                }
-                cipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
-                cipher.init(desKey, Cipher.MODE_ENCRYPT);
-                break;
-            case ALG_AES_ECB:
-                short paddedLength = (short) (lc + 16 - (lc % 16)); // Round up to the next multiple of 16
-                byte[] tempOutBuffer = new byte[paddedLength];
-
-                cipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
-                cipher.init(aesKey, Cipher.MODE_ENCRYPT, bufferRAM, (short) 0, (short) 16); // IV = 16 bytes zerados
-                break;
-            default:
-                ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
-        }
-
-        short outLen = cipher.doFinal(buf, ISO7816.OFFSET_CDATA, lc, bufferRAM, (short) 0);
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(outLen);
-        apdu.sendBytesLong(bufferRAM, (short) 0, outLen);
+    // Encrypts incoming data
+    private void encrypt(byte algorithm, byte[] buffer, short offset, short length) {
+        initCipher(algorithm, Cipher.MODE_ENCRYPT);
+        processCipher(buffer, offset, length);
     }
 
-    private void decrypt(APDU apdu) {
-        byte[] buf = apdu.getBuffer();
-        byte alg = buf[ISO7816.OFFSET_P1];
-        short lc = (short) (buf[ISO7816.OFFSET_LC] & 0xFF);
+    // Decrypts incoming data
+    private void decrypt(byte algorithm, byte[] buffer, short offset, short length) {
+        initCipher(algorithm, Cipher.MODE_DECRYPT);
+        processCipher(buffer, offset, length);
+    }
 
-        switch (alg) {
-            case ALG_DES_ECB:
-                if (lc % 8 != 0) {
-                    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH); // Error: must be a multiple of 8
-                }
-                cipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
-                cipher.init(desKey, Cipher.MODE_DECRYPT);
-                break;
-            case ALG_AES_ECB:
-                cipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
-                cipher.init(aesKey, Cipher.MODE_DECRYPT, bufferRAM, (short) 0, (short) 16);
-                break;
-            default:
-                ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+    // Initializes the cipher instance based on algorithm and mode
+    private void initCipher(byte algorithm, byte mode) {
+        if (algorithm == ALG_DES_ECB) {
+            cipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
+            cipher.init(desKey, mode);
+        } else if (algorithm == ALG_AES_ECB) {
+            cipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
+            cipher.init(aesKey, mode);
+        } else {
+            ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
         }
+        selectedAlgorithm = algorithm;
+    }
 
-        short outLen = cipher.doFinal(buf, ISO7816.OFFSET_CDATA, lc, bufferRAM, (short) 0);
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(outLen);
-        apdu.sendBytesLong(bufferRAM, (short) 0, outLen);
+    // Executes the encryption or decryption and returns result
+    private void processCipher(byte[] buffer, short offset, short length) {
+        short blockSize = (selectedAlgorithm == ALG_DES_ECB) ? (short)8 : (short)16;
+        if ((length % blockSize) != 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        short resultLen = cipher.doFinal(buffer, offset, length, tempBuffer, (short) 0);
+        Util.arrayCopyNonAtomic(tempBuffer, (short) 0, buffer, (short) 0, resultLen);
+        APDU.getCurrentAPDU().setOutgoingAndSend((short) 0, resultLen);
     }
 }
 
