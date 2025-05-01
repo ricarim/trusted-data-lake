@@ -4,7 +4,7 @@
 #include <sgx_tseal.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string>
 #include <sgx_urts.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -22,6 +22,18 @@
 #define RESPONSE_PIPE "/tmp/sgx_response"
 #define AUTH_REQUEST_FILE "/tmp/sgx_auth_request"
 #define AUTH_RESPONSE_FILE "/tmp/sgx_authorization"
+
+#define SIGNER_HOSPITAL 0
+#define SIGNER_LAB 1
+
+#define STAT_SUM 1
+#define STAT_MEAN 2
+#define STAT_MIN 3
+#define STAT_MAX 4
+#define STAT_MEDIAN 5
+#define STAT_MODE 6
+#define STAT_VARIANCE 7
+#define STAT_STDDEV 8
 
 sgx_enclave_id_t eid = 0;
 
@@ -229,42 +241,51 @@ int main() {
         return 1;
     }
 
-    FILE* pipe_stream = fdopen(pipe_fd, "r");
+    FILE* pipe = fdopen(pipe_fd, "r");
     printf("[App] SGX App is running. Waiting for commands...\n");
 
-    char buffer[256];
 
-    while (fgets(buffer, sizeof(buffer), pipe_stream)) {
-        buffer[strcspn(buffer, "\n")] = 0;
-        if (strcmp(buffer, "exit") == 0) break;
+    char input[1024];
+    while (fgets(input, sizeof(input), pipe)) {
+        input[strcspn(input, "\n")] = 0;
+        if (strcmp(input, "exit") == 0) break;
 
-        char cmd[16], arg1[128], arg2[256];
-        int parsed = sscanf(buffer, "%s %s %s", cmd, arg1, arg2);
+        std::vector<std::string> tokens;
+        char* tok = strtok(input, "|");
+        while (tok) {
+            tokens.push_back(tok);
+            tok = strtok(nullptr, "|");
+        }
 
-        if (parsed >= 2 && strcmp(cmd, "encrypt") == 0) {
-            printf("[App] Encrypting file: %s\n", arg1);
+
+        if (tokens.size() == 5 && tokens[0] == "encrypt") {
+            std::string signer = tokens[1];
+            std::string filename = tokens[2];
+            std::string gcs_path = tokens[3];
+            std::string signature_b64 = tokens[4];
 
             size_t plaintext_len;
-            char* plaintext = read_file(arg1, &plaintext_len);
+            char* plaintext = read_file(filename.c_str(), &plaintext_len);
             if (!plaintext) {
-                printf("Failed to read file.\n");
+                printf("[App] Failed to read input file\n");
                 continue;
             }
 
-            uint8_t iv[IV_SIZE];
+            uint8_t iv[IV_SIZE], mac[TAG_SIZE];
+            std::vector<uint8_t> ciphertext(plaintext_len);
+
             ret = ecall_generate_iv(eid, &retval, iv, IV_SIZE);
             if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-                printf("IV generation failed.\n");
+                printf("[App] Failed to generate IV\n");
+                free(plaintext);
                 continue;
             }
 
-            std::vector<uint8_t> ciphertext(plaintext_len);
-            uint8_t mac[TAG_SIZE];
             ret = ecall_encrypt_data(eid, &retval, (uint8_t*)plaintext, plaintext_len, iv, IV_SIZE, ciphertext.data(), mac);
             free(plaintext);
 
             if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-                printf("Encryption failed.\n");
+                printf("[App] Encryption failed\n");
                 continue;
             }
 
@@ -274,69 +295,82 @@ int main() {
             memcpy(combined.data() + IV_SIZE + TAG_SIZE, ciphertext.data(), ciphertext.size());
 
             write_file("encrypted.bin", combined.data(), combined.size());
-            printf("[App] File encrypted and saved as 'encrypted.bin'.\n");
 
-            if (parsed == 3) {
-                if (upload_to_gcs("encrypted.bin", arg2))
-                    printf("[App] Upload to GCS successful.\n");
-                else
-                    printf("[App] Upload to GCS failed.\n");
-            }
+            if (upload_to_gcs("encrypted.bin", gcs_path.c_str()))
+                printf("[App] Upload successful\n");
+            else
+                printf("[App] Upload failed\n");
+        }
 
-        } else if (parsed >= 3 && strcmp(cmd, "stat") == 0) {
-            printf("[App] Computing statistic '%s' using file from: %s\n", arg1, arg2);
+        else if (tokens.size() == 5 && tokens[0] == "stat") {
+            std::string signer = tokens[1];
+            std::string operation = tokens[2];
+            std::string gcs_path = tokens[3];
+            std::string signature_b64 = tokens[4];
 
-            if (!download_from_gcs(arg2, "encrypted.bin")) {
-                printf("[App] Failed to download encrypted file from GCS.\n");
+            int signer_type = (signer == "hospital") ? SIGNER_HOSPITAL : SIGNER_LAB;
+
+            if (!download_from_gcs(gcs_path.c_str(), "encrypted.bin")) {
+                printf("[App] Failed to download encrypted file\n");
                 continue;
             }
 
             size_t total_len;
             uint8_t* full_data = (uint8_t*)read_file("encrypted.bin", &total_len);
-            if (!full_data || total_len < (IV_SIZE + TAG_SIZE)) {
-                printf("Encrypted file is invalid.\n");
+            if (!full_data || total_len < IV_SIZE + TAG_SIZE) {
+                printf("[App] Encrypted file invalid\n");
                 continue;
             }
 
             uint8_t iv[IV_SIZE], mac[TAG_SIZE];
             memcpy(iv, full_data, IV_SIZE);
             memcpy(mac, full_data + IV_SIZE, TAG_SIZE);
-
             uint8_t* ciphertext = full_data + IV_SIZE + TAG_SIZE;
             size_t ciphertext_len = total_len - IV_SIZE - TAG_SIZE;
 
             int op_code = 0;
-            if (strcmp(arg1, "sum") == 0) op_code = 1;
-            else if (strcmp(arg1, "mean") == 0) op_code = 2;
-            else if (strcmp(arg1, "min") == 0) op_code = 3;
-            else if (strcmp(arg1, "max") == 0) op_code = 4;
-            else if (strcmp(arg1, "median") == 0) op_code = 5;
-            else if (strcmp(arg1, "mode") == 0) op_code = 6;
-            else if (strcmp(arg1, "variance") == 0) op_code = 7;
-            else if (strcmp(arg1, "stddev") == 0) op_code = 8;
+            if (operation == "sum") op_code = STAT_SUM;
+            else if (operation == "mean") op_code = STAT_MEAN;
+            else if (operation == "min") op_code = STAT_MIN;
+            else if (operation == "max") op_code = STAT_MAX;
+            else if (operation == "median") op_code = STAT_MEDIAN;
+            else if (operation == "mode") op_code = STAT_MODE;
+            else if (operation == "variance") op_code = STAT_VARIANCE;
+            else if (operation == "stddev") op_code = STAT_STDDEV;
+
+            char signed_data[512];
+            snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str());
 
             double result;
-            ret = ecall_process_stats(eid, &retval, ciphertext, ciphertext_len, iv, IV_SIZE, mac, op_code, &result);
-            free(full_data);
+            ret = ecall_process_stats(
+                eid, &retval,
+                signed_data,
+                signature_b64.c_str(),
+                signer_type,
+                ciphertext,
+                ciphertext_len,
+                iv,
+                IV_SIZE,
+                mac,
+                op_code,
+                &result
+            );
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");
             if (resp) {
                 if (ret == SGX_SUCCESS && retval == SGX_SUCCESS)
-                    fprintf(resp, "[App] Authorization granted.\n[App] Result: %.2f\n", result);
+                    fprintf(resp, "[App] Authorization granted\n[App] Result: %.2f\n", result);
                 else if (retval == MY_ERROR_ACCESS_DENIED)
-                    fprintf(resp, "[App] Authorization denied.\n");
+                    fprintf(resp, "[App] Authorization denied\n");
                 else
-                    fprintf(resp, "[App] Failed to compute stat.\n");
+                    fprintf(resp, "[App] Computation failed\n");
                 fclose(resp);
             }
 
-        } else {
-            printf("[App] Invalid command format.\n");
+            free(full_data);
         }
     }
 
     sgx_destroy_enclave(eid);
-    printf("[App] SGX App exited.\n");
     return 0;
 }
-

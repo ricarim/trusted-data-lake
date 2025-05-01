@@ -1,0 +1,2 @@
+g++ Client.cpp -o client -lssl -lcrypto
+

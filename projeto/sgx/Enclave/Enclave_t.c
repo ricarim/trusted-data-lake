@@ -51,8 +51,13 @@ typedef struct ms_ecall_verify_signature_t {
 
 typedef struct ms_ecall_process_stats_t {
 	sgx_status_t ms_retval;
+	const char* ms_signed_cmd;
+	size_t ms_signed_cmd_len;
+	const char* ms_signature_b64;
+	size_t ms_signature_b64_len;
+	int ms_signer_type;
 	uint8_t* ms_ciphertext;
-	size_t ms_ct_len;
+	size_t ms_ciphertext_len;
 	uint8_t* ms_iv;
 	size_t ms_iv_len;
 	uint8_t* ms_mac;
@@ -386,9 +391,15 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 		return SGX_ERROR_UNEXPECTED;
 	}
 	sgx_status_t status = SGX_SUCCESS;
+	const char* _tmp_signed_cmd = __in_ms.ms_signed_cmd;
+	size_t _len_signed_cmd = __in_ms.ms_signed_cmd_len ;
+	char* _in_signed_cmd = NULL;
+	const char* _tmp_signature_b64 = __in_ms.ms_signature_b64;
+	size_t _len_signature_b64 = __in_ms.ms_signature_b64_len ;
+	char* _in_signature_b64 = NULL;
 	uint8_t* _tmp_ciphertext = __in_ms.ms_ciphertext;
-	size_t _tmp_ct_len = __in_ms.ms_ct_len;
-	size_t _len_ciphertext = _tmp_ct_len;
+	size_t _tmp_ciphertext_len = __in_ms.ms_ciphertext_len;
+	size_t _len_ciphertext = _tmp_ciphertext_len;
 	uint8_t* _in_ciphertext = NULL;
 	uint8_t* _tmp_iv = __in_ms.ms_iv;
 	size_t _tmp_iv_len = __in_ms.ms_iv_len;
@@ -402,6 +413,8 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 	double* _in_result = NULL;
 	sgx_status_t _in_retval;
 
+	CHECK_UNIQUE_POINTER(_tmp_signed_cmd, _len_signed_cmd);
+	CHECK_UNIQUE_POINTER(_tmp_signature_b64, _len_signature_b64);
 	CHECK_UNIQUE_POINTER(_tmp_ciphertext, _len_ciphertext);
 	CHECK_UNIQUE_POINTER(_tmp_iv, _len_iv);
 	CHECK_UNIQUE_POINTER(_tmp_mac, _len_mac);
@@ -412,6 +425,44 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 	//
 	sgx_lfence();
 
+	if (_tmp_signed_cmd != NULL && _len_signed_cmd != 0) {
+		_in_signed_cmd = (char*)malloc(_len_signed_cmd);
+		if (_in_signed_cmd == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_signed_cmd, _len_signed_cmd, _tmp_signed_cmd, _len_signed_cmd)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+		_in_signed_cmd[_len_signed_cmd - 1] = '\0';
+		if (_len_signed_cmd != strlen(_in_signed_cmd) + 1)
+		{
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+	}
+	if (_tmp_signature_b64 != NULL && _len_signature_b64 != 0) {
+		_in_signature_b64 = (char*)malloc(_len_signature_b64);
+		if (_in_signature_b64 == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_signature_b64, _len_signature_b64, _tmp_signature_b64, _len_signature_b64)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+		_in_signature_b64[_len_signature_b64 - 1] = '\0';
+		if (_len_signature_b64 != strlen(_in_signature_b64) + 1)
+		{
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+	}
 	if (_tmp_ciphertext != NULL && _len_ciphertext != 0) {
 		if ( _len_ciphertext % sizeof(*_tmp_ciphertext) != 0)
 		{
@@ -479,7 +530,7 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 
 		memset((void*)_in_result, 0, _len_result);
 	}
-	_in_retval = ecall_process_stats(_in_ciphertext, _tmp_ct_len, _in_iv, _tmp_iv_len, _in_mac, __in_ms.ms_operation_type, _in_result);
+	_in_retval = ecall_process_stats((const char*)_in_signed_cmd, (const char*)_in_signature_b64, __in_ms.ms_signer_type, _in_ciphertext, _tmp_ciphertext_len, _in_iv, _tmp_iv_len, _in_mac, __in_ms.ms_operation_type, _in_result);
 	if (memcpy_verw_s(&ms->ms_retval, sizeof(ms->ms_retval), &_in_retval, sizeof(_in_retval))) {
 		status = SGX_ERROR_UNEXPECTED;
 		goto err;
@@ -492,6 +543,8 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 	}
 
 err:
+	if (_in_signed_cmd) free(_in_signed_cmd);
+	if (_in_signature_b64) free(_in_signature_b64);
 	if (_in_ciphertext) free(_in_ciphertext);
 	if (_in_iv) free(_in_iv);
 	if (_in_mac) free(_in_mac);
