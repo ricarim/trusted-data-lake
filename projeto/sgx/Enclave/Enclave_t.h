@@ -31,6 +31,7 @@ sgx_status_t ecall_variance(double* data, size_t len, double* result);
 sgx_status_t ecall_stddev(double* data, size_t len, double* result);
 
 sgx_status_t SGX_CDECL ocall_printf(const char* str);
+sgx_status_t SGX_CDECL ocall_request_authorization(const char* msg, int* authorized);
 sgx_status_t SGX_CDECL sgx_thread_wait_untrusted_event_ocall(void* self);
 sgx_status_t SGX_CDECL sgx_thread_set_untrusted_event_ocall(void* waiter);
 sgx_status_t SGX_CDECL sgx_thread_setwait_untrusted_events_ocall(void* waiter, void* self);

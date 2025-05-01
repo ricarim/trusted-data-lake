@@ -136,6 +136,11 @@ typedef struct ms_ocall_printf_t {
 	const char* ms_str;
 } ms_ocall_printf_t;
 
+typedef struct ms_ocall_request_authorization_t {
+	const char* ms_msg;
+	int* ms_authorized;
+} ms_ocall_request_authorization_t;
+
 typedef struct ms_sgx_thread_wait_untrusted_event_ocall_t {
 	void* ms_self;
 } ms_sgx_thread_wait_untrusted_event_ocall_t;
@@ -1334,10 +1339,11 @@ SGX_EXTERNC const struct {
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[5][14];
+	uint8_t entry_table[6][14];
 } g_dyn_entry_table = {
-	5,
+	6,
 	{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
@@ -1398,6 +1404,85 @@ sgx_status_t SGX_CDECL ocall_printf(const char* str)
 	return status;
 }
 
+sgx_status_t SGX_CDECL ocall_request_authorization(const char* msg, int* authorized)
+{
+	sgx_status_t status = SGX_SUCCESS;
+	size_t _len_msg = msg ? strlen(msg) + 1 : 0;
+	size_t _len_authorized = sizeof(int);
+
+	ms_ocall_request_authorization_t* ms = NULL;
+	size_t ocalloc_size = sizeof(ms_ocall_request_authorization_t);
+	void *__tmp = NULL;
+
+	void *__tmp_authorized = NULL;
+
+	CHECK_ENCLAVE_POINTER(msg, _len_msg);
+	CHECK_ENCLAVE_POINTER(authorized, _len_authorized);
+
+	if (ADD_ASSIGN_OVERFLOW(ocalloc_size, (msg != NULL) ? _len_msg : 0))
+		return SGX_ERROR_INVALID_PARAMETER;
+	if (ADD_ASSIGN_OVERFLOW(ocalloc_size, (authorized != NULL) ? _len_authorized : 0))
+		return SGX_ERROR_INVALID_PARAMETER;
+
+	__tmp = sgx_ocalloc(ocalloc_size);
+	if (__tmp == NULL) {
+		sgx_ocfree();
+		return SGX_ERROR_UNEXPECTED;
+	}
+	ms = (ms_ocall_request_authorization_t*)__tmp;
+	__tmp = (void *)((size_t)__tmp + sizeof(ms_ocall_request_authorization_t));
+	ocalloc_size -= sizeof(ms_ocall_request_authorization_t);
+
+	if (msg != NULL) {
+		if (memcpy_verw_s(&ms->ms_msg, sizeof(const char*), &__tmp, sizeof(const char*))) {
+			sgx_ocfree();
+			return SGX_ERROR_UNEXPECTED;
+		}
+		if (_len_msg % sizeof(*msg) != 0) {
+			sgx_ocfree();
+			return SGX_ERROR_INVALID_PARAMETER;
+		}
+		if (memcpy_verw_s(__tmp, ocalloc_size, msg, _len_msg)) {
+			sgx_ocfree();
+			return SGX_ERROR_UNEXPECTED;
+		}
+		__tmp = (void *)((size_t)__tmp + _len_msg);
+		ocalloc_size -= _len_msg;
+	} else {
+		ms->ms_msg = NULL;
+	}
+
+	if (authorized != NULL) {
+		if (memcpy_verw_s(&ms->ms_authorized, sizeof(int*), &__tmp, sizeof(int*))) {
+			sgx_ocfree();
+			return SGX_ERROR_UNEXPECTED;
+		}
+		__tmp_authorized = __tmp;
+		if (_len_authorized % sizeof(*authorized) != 0) {
+			sgx_ocfree();
+			return SGX_ERROR_INVALID_PARAMETER;
+		}
+		memset_verw(__tmp_authorized, 0, _len_authorized);
+		__tmp = (void *)((size_t)__tmp + _len_authorized);
+		ocalloc_size -= _len_authorized;
+	} else {
+		ms->ms_authorized = NULL;
+	}
+
+	status = sgx_ocall(1, ms);
+
+	if (status == SGX_SUCCESS) {
+		if (authorized) {
+			if (memcpy_s((void*)authorized, _len_authorized, __tmp_authorized, _len_authorized)) {
+				sgx_ocfree();
+				return SGX_ERROR_UNEXPECTED;
+			}
+		}
+	}
+	sgx_ocfree();
+	return status;
+}
+
 sgx_status_t SGX_CDECL sgx_thread_wait_untrusted_event_ocall(void* self)
 {
 	sgx_status_t status = SGX_SUCCESS;
@@ -1437,7 +1522,7 @@ sgx_status_t SGX_CDECL sgx_thread_wait_untrusted_event_ocall(void* self)
 		ms->ms_self = NULL;
 	}
 
-	status = sgx_ocall(1, ms);
+	status = sgx_ocall(2, ms);
 
 	if (status == SGX_SUCCESS) {
 	}
@@ -1484,7 +1569,7 @@ sgx_status_t SGX_CDECL sgx_thread_set_untrusted_event_ocall(void* waiter)
 		ms->ms_waiter = NULL;
 	}
 
-	status = sgx_ocall(2, ms);
+	status = sgx_ocall(3, ms);
 
 	if (status == SGX_SUCCESS) {
 	}
@@ -1550,7 +1635,7 @@ sgx_status_t SGX_CDECL sgx_thread_setwait_untrusted_events_ocall(void* waiter, v
 		ms->ms_self = NULL;
 	}
 
-	status = sgx_ocall(3, ms);
+	status = sgx_ocall(4, ms);
 
 	if (status == SGX_SUCCESS) {
 	}
@@ -1602,7 +1687,7 @@ sgx_status_t SGX_CDECL sgx_thread_set_multiple_untrusted_events_ocall(void* wait
 		return SGX_ERROR_UNEXPECTED;
 	}
 
-	status = sgx_ocall(4, ms);
+	status = sgx_ocall(5, ms);
 
 	if (status == SGX_SUCCESS) {
 	}

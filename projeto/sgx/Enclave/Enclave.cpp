@@ -12,7 +12,7 @@
 #include <numeric>  
 #include <cmath>    
 
-
+#define MY_ERROR_ACCESS_DENIED ((sgx_status_t)0xFFFF0001)
 #define RSA3072_KEY_SIZE 384
 #define RSA3072_EXP_SIZE 4
 #define SYM_KEY_SIZE 32 
@@ -346,12 +346,20 @@ sgx_status_t ecall_process_stats(
     int operation_type,
     double* result
 ) {
-    char debug[128];
-    snprintf(debug, sizeof(debug), "iv[0]=0x%x mac[0]=0x%x ciphertext_len=%zu\n", iv[0], mac[0], ciphertext_len);
-    ocall_printf(debug);
 
     if (!g_sym_key_ready || !ciphertext || !iv || !mac || !result)
         return SGX_ERROR_INVALID_PARAMETER;
+
+    const char* msg = "Request to execute statistic operation. Approve? (yes/no)";
+    int authorized = 0;
+    ocall_request_authorization(msg,&authorized);
+
+    
+    if (!authorized) {
+        ocall_printf("[Enclave] Authorization DENIED.\n");
+    return MY_ERROR_ACCESS_DENIED;
+    }
+    ocall_printf("[Enclave] Authorization GRANTED.\n");
 
 
     // Alocar buffer para plaintext
@@ -413,14 +421,4 @@ sgx_status_t ecall_process_stats(
     }
 }
 
-
-void ecall_process_average_age(const char* decrypted_csv) {
-    std::string csv(decrypted_csv);
-    std::vector<Record> records = parse_csv(csv);
-
-
-    char buf[100];
-    snprintf(buf, sizeof(buf), "Average patient age: %.2f\n");
-    ocall_printf(buf);
-}
 

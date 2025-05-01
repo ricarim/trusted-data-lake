@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <fcntl.h>
+#include <sgx_error.h>
 #include <sgx_tseal.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -12,9 +14,10 @@
 #define ENCLAVE_FILE "enclave.signed.so"
 #define IV_SIZE 12
 #define TAG_SIZE 16
-
-#define SEALED_KEY_FILE "sealed_key.bin"
 #define SYM_KEY_SIZE 32
+#define SEALED_KEY_FILE "sealed_key.bin"
+#define MY_ERROR_ACCESS_DENIED 0xFFFF0001
+#define PIPE_PATH "/tmp/sgx_pipe"
 
 sgx_enclave_id_t eid = 0;
 
@@ -23,29 +26,44 @@ void ocall_printf(const char* str) {
     printf("%s", str);
 }
 
-void menu() {
-    printf("\nSecure SGX Data Lake\n");
-    printf("====================\n");
-    printf("1. Encrypt and upload CSV\n");
-    printf("2. Download and compute statistic\n");
-    printf("0. Exit\n");
-    printf("Choose an option: ");
+void ocall_request_authorization(const char* message, int* authorized) {
+    printf("[App] Authorization request: %s\n", message);
+
+    // Escreve o pedido no ficheiro
+    FILE* req_file = fopen("/tmp/sgx_auth_request", "w");
+    if (req_file) {
+        fprintf(req_file, "%s\n", message);
+        fclose(req_file);
+    } else {
+        printf("[App] Failed to write auth request file.\n");
+        *authorized = 0;
+        return;
+    }
+
+    // Aguarda a resposta ser escrita pelo client
+    printf("[App] Waiting for authorization response...\n");
+    while (access("/tmp/sgx_authorization", F_OK) != 0) {
+        sleep(1);  // Espera até o client escrever
+    }
+
+    // Lê a resposta
+    FILE* approval_file = fopen("/tmp/sgx_authorization", "r");
+    if (approval_file) {
+        char response[16];
+        fgets(response, sizeof(response), approval_file);
+        fclose(approval_file);
+        remove("/tmp/sgx_authorization");  // limpa depois de usar
+        remove("/tmp/sgx_auth_request");
+
+        response[strcspn(response, "\n")] = 0;
+        *authorized = (strcmp(response, "yes") == 0);
+        printf("[App] Authorization result: %s\n", response);
+    } else {
+        printf("[App] Failed to read authorization response.\n");
+        *authorized = 0;
+    }
 }
 
-void stats_menu() {
-    printf("\nStatistical Operations\n");
-    printf("=======================\n");
-    printf("1. Sum\n");
-    printf("2. Mean\n");
-    printf("3. Min\n");
-    printf("4. Max\n");
-    printf("5. Median\n");
-    printf("6. Mode\n");
-    printf("7. Variance\n");
-    printf("8. Standard Deviation\n");
-    printf("0. Back\n");
-    printf("Choose an operation: ");
-}
 
 // Save sealed key to file
 bool save_sealed_key(const char* path, uint8_t* data, uint32_t size) {
@@ -153,9 +171,6 @@ bool is_remote_newer(const char* gcs_uri, const char* local_path) {
 }
 
 
-const char* encrypted_hospital_csv = "<encrypted_hospital_data_placeholder>";
-const char* encrypted_lab_csv = "<encrypted_lab_data_placeholder>";
-
 int main() {
     sgx_status_t ret,retval;
 
@@ -166,172 +181,146 @@ int main() {
         return -1;
     }
 
-    uint8_t iv[IV_SIZE];
-    ret = ecall_generate_iv(eid, &retval, iv, IV_SIZE);
-    if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-        printf("Failed to generate IV inside enclave.\n");
-    }
-
     uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
     uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
 
     if (access(SEALED_KEY_FILE, F_OK) != 0) {
-        printf("Generating new symmetric key and sealing it...\n");
+        printf("[App] Generating and sealing symmetric key...\n");
         ret = ecall_generate_and_seal_key(eid, &retval, sealed_data, sealed_size);
-        if (ret != SGX_SUCCESS) {
-            printf("Failed to seal key: 0x%x\n", ret);
-            return -1;
+        if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+            printf("[App] Failed to seal key.\n");
+            return 1;
         }
         if (!save_sealed_key(SEALED_KEY_FILE, sealed_data, sealed_size)) {
-            printf("Failed to save sealed key.\n");
-            return -1;
+            printf("[App] Failed to save sealed key.\n");
+            return 1;
         }
     } else {
-        printf("Loading sealed key from file...\n");
+        printf("[App] Loading sealed key from file...\n");
         if (!load_sealed_key(SEALED_KEY_FILE, &sealed_data, &sealed_size)) {
-            printf("Failed to load sealed key.\n");
-            return -1;
+            printf("[App] Failed to load sealed key.\n");
+            return 1;
         }
         ret = ecall_unseal_key(eid, &retval, sealed_data, sealed_size);
-        if (ret != SGX_SUCCESS) {
-            printf("Failed to unseal key: 0x%x\n", ret);
-            return -1;
+        if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+            printf("[App] Failed to unseal key.\n");
+            return 1;
         }
     }
     free(sealed_data);
 
+    if (access(PIPE_PATH, F_OK) != 0) mkfifo(PIPE_PATH, 0666);
+    int pipe_fd = open(PIPE_PATH, O_RDWR);
+    if (pipe_fd < 0) {
+        perror("open pipe");
+        return 1;
+    }
 
-    char local_file[256] = "input.csv";
-    char encrypted_file[256] = "encrypted.bin";
-    char gcs_uri[256];
-    uint8_t mac[TAG_SIZE] = {0};
+    FILE* pipe_stream = fdopen(pipe_fd, "r");
+    printf("[App] SGX App is running. Waiting for commands...\n");
 
-    int option = -1;
-    while (1) {
-        menu();
-        scanf("%d", &option);
-        getchar(); // consume newline
+    char buffer[256];
 
-        switch (option) {
-            case 1: {
-                printf("Enter path to CSV file: ");
-                fgets(local_file, sizeof(local_file), stdin);
-                local_file[strcspn(local_file, "\n")] = 0;
+    while (fgets(buffer, sizeof(buffer), pipe_stream)) {
+        buffer[strcspn(buffer, "\n")] = 0;
+        if (strcmp(buffer, "exit") == 0) break;
 
-                size_t plaintext_len;
-                char* plaintext = read_file(local_file, &plaintext_len);
-                if (!plaintext) {
-                    printf("Failed to read file.\n");
-                    continue;
-                }
+        char cmd[16], arg1[128], arg2[256];
+        int parsed = sscanf(buffer, "%s %s %s", cmd, arg1, arg2);
 
-                std::vector<uint8_t> ciphertext(plaintext_len);
+        if (parsed >= 2 && strcmp(cmd, "encrypt") == 0) {
+            printf("[App] Encrypting file: %s\n", arg1);
 
-                ret = ecall_encrypt_data(
-                    eid, &retval,
-                    (uint8_t*)plaintext, plaintext_len,
-                    iv, IV_SIZE,
-                    ciphertext.data(), mac
-                );
-                free(plaintext);
+            size_t plaintext_len;
+            char* plaintext = read_file(arg1, &plaintext_len);
+            if (!plaintext) {
+                printf("Failed to read file.\n");
+                continue;
+            }
 
-                if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-                    printf("Encryption failed.\n");
-                    continue;
-                }
+            uint8_t iv[IV_SIZE];
+            ret = ecall_generate_iv(eid, &retval, iv, IV_SIZE);
+            if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+                printf("IV generation failed.\n");
+                continue;
+            }
 
-                // Save IV + MAC + ciphertext to file
-                std::vector<uint8_t> combined(IV_SIZE + TAG_SIZE + ciphertext.size());
-                memcpy(combined.data(), iv, IV_SIZE);
-                memcpy(combined.data() + IV_SIZE, mac, TAG_SIZE);
-                memcpy(combined.data() + IV_SIZE + TAG_SIZE, ciphertext.data(), ciphertext.size());
+            std::vector<uint8_t> ciphertext(plaintext_len);
+            uint8_t mac[TAG_SIZE];
+            ret = ecall_encrypt_data(eid, &retval, (uint8_t*)plaintext, plaintext_len, iv, IV_SIZE, ciphertext.data(), mac);
+            free(plaintext);
 
+            if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+                printf("Encryption failed.\n");
+                continue;
+            }
 
-                if (!write_file(encrypted_file, combined.data(), combined.size())) {
-                    printf("Failed to write encrypted file.\n");
-                    continue;
-                }
+            std::vector<uint8_t> combined(IV_SIZE + TAG_SIZE + ciphertext.size());
+            memcpy(combined.data(), iv, IV_SIZE);
+            memcpy(combined.data() + IV_SIZE, mac, TAG_SIZE);
+            memcpy(combined.data() + IV_SIZE + TAG_SIZE, ciphertext.data(), ciphertext.size());
 
+            write_file("encrypted.bin", combined.data(), combined.size());
+            printf("[App] File encrypted and saved as 'encrypted.bin'.\n");
 
-                // Ask GCS URI
-                printf("Enter GCS URI to upload: ");
-                fgets(gcs_uri, sizeof(gcs_uri), stdin);
-                gcs_uri[strcspn(gcs_uri, "\n")] = 0;
-
-                if (!upload_to_gcs(encrypted_file, gcs_uri))
-                    printf("Upload failed.\n");
+            if (parsed == 3) {
+                if (upload_to_gcs("encrypted.bin", arg2))
+                    printf("[App] Upload to GCS successful.\n");
                 else
-                    printf("Upload complete.\n");
-            break;
+                    printf("[App] Upload to GCS failed.\n");
             }
-            case 2: {
-                // Check if the encrypted file should be downloaded or used locally
-                printf("Enter GCS URI to check/download encrypted file: ");
-                fgets(gcs_uri, sizeof(gcs_uri), stdin);
-                gcs_uri[strcspn(gcs_uri, "\n")] = 0;
 
-                // Check if the remote file is newer or local doesn't exist
-                if (access(encrypted_file, F_OK) != 0 || is_remote_newer(gcs_uri, encrypted_file)) {
-                    printf("Downloading the most recent file from GCS...\n");
-                    if (!download_from_gcs(gcs_uri, encrypted_file)) {
-                        printf("Download failed.\n");
-                        continue;
-                    }
-                } else {
-                    printf("Local file is up-to-date. Using local copy.\n");
-                }
+        } else if (parsed >= 3 && strcmp(cmd, "stat") == 0) {
+            printf("[App] Computing statistic '%s' using file from: %s\n", arg1, arg2);
 
-                size_t total_len;
-                uint8_t* full_data = (uint8_t*)read_file(encrypted_file, &total_len);
-                if (!full_data || total_len < (IV_SIZE + TAG_SIZE)) {
-                    printf("Encrypted file is invalid or corrupted.\n");
-                    if (full_data) free(full_data);
-                    continue;
-                }
-
-                memcpy(iv, full_data, IV_SIZE);  // get IV
-                memcpy(mac, full_data + IV_SIZE, TAG_SIZE);  // get MAC
-
-                uint8_t* ciphertext = full_data + IV_SIZE + TAG_SIZE;
-                size_t ciphertext_len = total_len - IV_SIZE - TAG_SIZE;
-
-
-                stats_menu();
-                int op;
-                scanf("%d", &op);
-                getchar();
-
-                double result;
-                sgx_status_t retval;
-
-                ret = ecall_process_stats(
-                    eid, &retval,
-                    ciphertext, ciphertext_len,
-                    iv, IV_SIZE,
-                    mac,
-                    op, &result
-                );
-
-                free(full_data);
-
-                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS)
-                    printf("Result: %.2f\n", result);
-                else
-                    printf("Failed to compute stat. SGX error: 0x%x\n", ret);
-                break;
+            if (!download_from_gcs(arg2, "encrypted.bin")) {
+                printf("[App] Failed to download encrypted file from GCS.\n");
+                continue;
             }
-            case 0: {
-                printf("Exiting...\n");
-                sgx_destroy_enclave(eid);
-                return 0;
+
+            size_t total_len;
+            uint8_t* full_data = (uint8_t*)read_file("encrypted.bin", &total_len);
+            if (!full_data || total_len < (IV_SIZE + TAG_SIZE)) {
+                printf("Encrypted file is invalid.\n");
+                continue;
             }
-            default: {
-                printf("Invalid option. Try again.\n");
-                break;
+
+            uint8_t iv[IV_SIZE], mac[TAG_SIZE];
+            memcpy(iv, full_data, IV_SIZE);
+            memcpy(mac, full_data + IV_SIZE, TAG_SIZE);
+
+            uint8_t* ciphertext = full_data + IV_SIZE + TAG_SIZE;
+            size_t ciphertext_len = total_len - IV_SIZE - TAG_SIZE;
+
+            int op_code = 0;
+            if (strcmp(arg1, "sum") == 0) op_code = 1;
+            else if (strcmp(arg1, "mean") == 0) op_code = 2;
+            else if (strcmp(arg1, "min") == 0) op_code = 3;
+            else if (strcmp(arg1, "max") == 0) op_code = 4;
+            else if (strcmp(arg1, "median") == 0) op_code = 5;
+            else if (strcmp(arg1, "mode") == 0) op_code = 6;
+            else if (strcmp(arg1, "variance") == 0) op_code = 7;
+            else if (strcmp(arg1, "stddev") == 0) op_code = 8;
+
+            double result;
+            ret = ecall_process_stats(eid, &retval, ciphertext, ciphertext_len, iv, IV_SIZE, mac, op_code, &result);
+
+            if (ret == SGX_SUCCESS && retval == SGX_SUCCESS) {
+                printf("[App] Result: %.2f\n", result);
+            } else if (retval == MY_ERROR_ACCESS_DENIED) {
+                printf("[App] Authorization denied.\n");
+            } else {
+                printf("[App] Failed to compute stat.\n");
             }
+
+            free(full_data);
+        } else {
+            printf("[App] Invalid command format.\n");
         }
     }
 
     sgx_destroy_enclave(eid);
+    printf("[App] SGX App exited.\n");
     return 0;
 }
+
