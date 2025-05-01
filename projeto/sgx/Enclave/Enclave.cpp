@@ -357,7 +357,7 @@ sgx_status_t ecall_process_stats(
     
     if (!authorized) {
         ocall_printf("[Enclave] Authorization DENIED.\n");
-    return MY_ERROR_ACCESS_DENIED;
+        return MY_ERROR_ACCESS_DENIED;
     }
     ocall_printf("[Enclave] Authorization GRANTED.\n");
 

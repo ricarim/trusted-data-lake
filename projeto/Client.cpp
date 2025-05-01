@@ -3,10 +3,12 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <fstream>
-
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define AUTH_REQUEST_FILE "/tmp/sgx_auth_request"
 #define AUTH_RESPONSE_FILE "/tmp/sgx_authorization"
+#define RESPONSE_PIPE "/tmp/sgx_response"
 
 void show_menu() {
     std::cout << "\n==== SGX Client Menu ====" << std::endl;
@@ -37,10 +39,9 @@ std::string get_stat_name(int op) {
     }
 }
 
-
 void wait_for_authorization_request() {
     while (access(AUTH_REQUEST_FILE, F_OK) != 0) {
-        usleep(100000); // 100ms
+        usleep(100000); // espera 100ms
     }
 
     std::ifstream in(AUTH_REQUEST_FILE);
@@ -57,6 +58,27 @@ void wait_for_authorization_request() {
     std::ofstream out(AUTH_RESPONSE_FILE);
     out << answer << std::endl;
     out.close();
+}
+
+void read_sgx_response() {
+    while (access(RESPONSE_PIPE, F_OK) != 0) {
+        usleep(100000);
+    }
+
+    std::ifstream resp(RESPONSE_PIPE);
+    if (!resp.is_open()) {
+        std::cerr << "[Client] Failed to open sgx_response.\n";
+        return;
+    }
+
+    std::cout << "\n[Client] Response from SGX app:\n";
+    std::string line;
+    while (std::getline(resp, line)) {
+        std::cout << "  " << line << "\n";
+    }
+    resp.close();
+    std::remove(RESPONSE_PIPE);
+
 }
 
 int main() {
@@ -94,11 +116,13 @@ int main() {
                 continue;
             }
 
+            // Envia comando antes de responder à autorização
             std::string cmd = "ssh localhost \"echo 'stat " + stat_name + " " + filename + "' > /tmp/sgx_pipe\"";
-            std::cout << "\n[Client] Sending stat command via SSH: " << stat_name << " " << filename << std::endl;
+            std::cout << "\n[Client] Sending stat command via SSH...\n";
             system(cmd.c_str());
 
             wait_for_authorization_request();
+            read_sgx_response();
         } else {
             std::cout << "Invalid option. Try again.\n";
         }

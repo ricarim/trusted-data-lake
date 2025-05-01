@@ -17,7 +17,11 @@
 #define SYM_KEY_SIZE 32
 #define SEALED_KEY_FILE "sealed_key.bin"
 #define MY_ERROR_ACCESS_DENIED 0xFFFF0001
+
 #define PIPE_PATH "/tmp/sgx_pipe"
+#define RESPONSE_PIPE "/tmp/sgx_response"
+#define AUTH_REQUEST_FILE "/tmp/sgx_auth_request"
+#define AUTH_RESPONSE_FILE "/tmp/sgx_authorization"
 
 sgx_enclave_id_t eid = 0;
 
@@ -174,6 +178,11 @@ bool is_remote_newer(const char* gcs_uri, const char* local_path) {
 int main() {
     sgx_status_t ret,retval;
 
+    remove(PIPE_PATH);
+    remove(RESPONSE_PIPE);
+    remove(AUTH_REQUEST_FILE);
+    remove(AUTH_RESPONSE_FILE);
+
     // Create enclave
     ret = sgx_create_enclave(ENCLAVE_FILE, SGX_DEBUG_FLAG, NULL, NULL, &eid, NULL);
     if (ret != SGX_SUCCESS) {
@@ -209,7 +218,11 @@ int main() {
     }
     free(sealed_data);
 
-    if (access(PIPE_PATH, F_OK) != 0) mkfifo(PIPE_PATH, 0666);
+    if (access(PIPE_PATH, F_OK) != 0)
+        mkfifo(PIPE_PATH, 0666);
+    if (access(RESPONSE_PIPE, F_OK) != 0)
+        mkfifo(RESPONSE_PIPE, 0666);
+
     int pipe_fd = open(PIPE_PATH, O_RDWR);
     if (pipe_fd < 0) {
         perror("open pipe");
@@ -304,16 +317,19 @@ int main() {
 
             double result;
             ret = ecall_process_stats(eid, &retval, ciphertext, ciphertext_len, iv, IV_SIZE, mac, op_code, &result);
+            free(full_data);
 
-            if (ret == SGX_SUCCESS && retval == SGX_SUCCESS) {
-                printf("[App] Result: %.2f\n", result);
-            } else if (retval == MY_ERROR_ACCESS_DENIED) {
-                printf("[App] Authorization denied.\n");
-            } else {
-                printf("[App] Failed to compute stat.\n");
+            FILE* resp = fopen(RESPONSE_PIPE, "w");
+            if (resp) {
+                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS)
+                    fprintf(resp, "[App] Authorization granted.\n[App] Result: %.2f\n", result);
+                else if (retval == MY_ERROR_ACCESS_DENIED)
+                    fprintf(resp, "[App] Authorization denied.\n");
+                else
+                    fprintf(resp, "[App] Failed to compute stat.\n");
+                fclose(resp);
             }
 
-            free(full_data);
         } else {
             printf("[App] Invalid command format.\n");
         }
