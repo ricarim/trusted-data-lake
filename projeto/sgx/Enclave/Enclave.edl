@@ -1,5 +1,7 @@
 enclave {
     trusted {
+        public sgx_status_t ecall_generate_and_seal_key([out, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
+        public sgx_status_t ecall_unseal_key([in, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
         public sgx_status_t ecall_verify_signature(
             [in, size=data_len] uint8_t* data,
             size_t data_len,
@@ -8,9 +10,44 @@ enclave {
             int signer_type,
             [out] int* is_valid
              );
+        public sgx_status_t ecall_process_stats(
+            [in, size=ct_len] uint8_t* ciphertext,
+            size_t ct_len,
+            [in, size=iv_len] uint8_t* iv,
+            size_t iv_len,
+            [in, size=16] uint8_t* mac,
+            int operation_type,                           // 0=mean, 1=variance, etc.
+            [out] double* result
+        );
+        public sgx_status_t ecall_encrypt_data(
+            [in, size=plaintext_len] uint8_t* plaintext,
+            size_t plaintext_len,
+            [in, size=iv_len] uint8_t* iv,
+            size_t iv_len,
+            [out, size=plaintext_len] uint8_t* ciphertext,
+            [out, size=16] uint8_t* mac
+        );
+        public sgx_status_t ecall_generate_iv([out, size=iv_len] uint8_t* iv, size_t iv_len);
+
+        public sgx_status_t ecall_sum([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_mean([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_min([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_max([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_median([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_mode([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_variance([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_stddev([in, size=len] double* data, size_t len, [out] double* result);
+
     };
 
     untrusted {
         void ocall_printf([in, string] const char* str);
+
+        void sgx_thread_wait_untrusted_event_ocall([in, size=1] void* self);
+        void sgx_thread_set_untrusted_event_ocall([in, size=1] void* waiter);
+        void sgx_thread_setwait_untrusted_events_ocall([in, size=1] void* waiter, [in, size=1] void* self);
+        void sgx_thread_set_multiple_untrusted_events_ocall([in, size=1] void* waiters, size_t total);
+
+
     };
 };

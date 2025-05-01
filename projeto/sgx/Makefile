@@ -34,6 +34,7 @@ else
         SGX_COMMON_CFLAGS += -O2
 endif
 
+
 ######## App Settings ########
 
 ifneq ($(SGX_MODE), HW)
@@ -94,7 +95,7 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++
+Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++14 -nostdinc++
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
