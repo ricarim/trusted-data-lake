@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 #include <fcntl.h>
 #include <sgx_error.h>
 #include <sgx_tseal.h>
@@ -9,6 +10,8 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <vector>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
 #include "Enclave_u.h"
 
 #define ENCLAVE_FILE "enclave.signed.so"
@@ -42,10 +45,23 @@ void ocall_printf(const char* str) {
     printf("%s", str);
 }
 
+std::vector<uint8_t> read_pem_file(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return {};
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    rewind(f);
+    std::vector<uint8_t> buffer(size);
+    fread(buffer.data(), 1, size, f);
+    fclose(f);
+    return buffer;
+}
+
+
 void ocall_request_authorization(const char* message, int* authorized) {
     printf("[App] Authorization request: %s\n", message);
 
-    // Escreve o pedido no ficheiro
+    // Write the request to the file
     FILE* req_file = fopen("/tmp/sgx_auth_request", "w");
     if (req_file) {
         fprintf(req_file, "%s\n", message);
@@ -56,19 +72,19 @@ void ocall_request_authorization(const char* message, int* authorized) {
         return;
     }
 
-    // Aguarda a resposta ser escrita pelo client
+    // Wait for the response to be written by the client
     printf("[App] Waiting for authorization response...\n");
     while (access("/tmp/sgx_authorization", F_OK) != 0) {
-        sleep(1);  // Espera até o client escrever
+        sleep(1);    // Wait until client writes
     }
 
-    // Lê a resposta
+    // Read the response
     FILE* approval_file = fopen("/tmp/sgx_authorization", "r");
     if (approval_file) {
         char response[16];
         fgets(response, sizeof(response), approval_file);
         fclose(approval_file);
-        remove("/tmp/sgx_authorization");  // limpa depois de usar
+        remove("/tmp/sgx_authorization");
         remove("/tmp/sgx_auth_request");
 
         response[strcspn(response, "\n")] = 0;
@@ -80,6 +96,20 @@ void ocall_request_authorization(const char* message, int* authorized) {
     }
 }
 
+std::vector<uint8_t> base64_decode(const std::string& encoded) {
+    BIO* b64 = BIO_new(BIO_f_base64());
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+    BIO* mem = BIO_new_mem_buf(encoded.data(), encoded.size());
+    mem = BIO_push(b64, mem);
+
+    std::vector<uint8_t> decoded(encoded.size()); 
+    int len = BIO_read(mem, decoded.data(), decoded.size());
+    if (len < 0) len = 0;
+    decoded.resize(len);
+
+    BIO_free_all(mem);
+    return decoded;
+}
 
 // Save sealed key to file
 bool save_sealed_key(const char* path, uint8_t* data, uint32_t size) {
@@ -107,23 +137,45 @@ bool load_sealed_key(const char* path, uint8_t** out_data, uint32_t* out_size) {
 
 char* read_file(const char* filename, size_t* out_size) {
     FILE* file = fopen(filename, "rb");
-    if (!file) return nullptr;
+    if (!file) {
+        printf("[read_file] Failed to open %s\n", filename);
+        return nullptr;
+    }
 
-    fseek(file, 0, SEEK_END);
-    size_t size = ftell(file);
-    rewind(file);
-
-    char* buffer = (char*)malloc(size);
-    if (!buffer) {
+    if (fseek(file, 0, SEEK_END) != 0) {
+        printf("[read_file] fseek failed\n");
         fclose(file);
         return nullptr;
     }
 
-    fread(buffer, 1, size, file);
+    long size = ftell(file);
+    if (size <= 0) {
+        printf("[read_file] File is empty or ftell failed\n");
+        fclose(file);
+        return nullptr;
+    }
+
+    rewind(file);
+    char* buffer = (char*)malloc(size);
+    if (!buffer) {
+        printf("[read_file] malloc failed\n");
+        fclose(file);
+        return nullptr;
+    }
+
+    size_t read = fread(buffer, 1, size, file);
     fclose(file);
+
+    if (read != (size_t)size) {
+        printf("[read_file] fread read %zu but expected %ld\n", read, size);
+        free(buffer);
+        return nullptr;
+    }
+
     if (out_size) *out_size = size;
     return buffer;
 }
+
 
 bool write_file(const char* filename, const uint8_t* data, size_t size) {
     FILE* file = fopen(filename, "wb");
@@ -256,6 +308,11 @@ int main() {
             tokens.push_back(tok);
             tok = strtok(nullptr, "|");
         }
+        
+        printf("[App] Tokens found: %zu\n", tokens.size());
+        for (size_t i = 0; i < tokens.size(); ++i)
+            printf("[App] Token[%zu]: %s\n", i, tokens[i].c_str());
+
 
 
         if (tokens.size() == 5 && tokens[0] == "encrypt") {
@@ -300,9 +357,7 @@ int main() {
                 printf("[App] Upload successful\n");
             else
                 printf("[App] Upload failed\n");
-        }
-
-        else if (tokens.size() == 5 && tokens[0] == "stat") {
+        } else if (tokens.size() == 5 && tokens[0] == "stat") {
             std::string signer = tokens[1];
             std::string operation = tokens[2];
             std::string gcs_path = tokens[3];
@@ -341,11 +396,31 @@ int main() {
             char signed_data[512];
             snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str());
 
-            double result;
+            std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
+            printf("[App] Decoded signature length: %zu\n", sig_bin.size());
+            for (int i = 0; i < 8; ++i)
+                printf("sig_bin[%d] = 0x%02X\n", i, sig_bin[i]);
+            if (sig_bin.size() != 384) {
+                printf("[App] Invalid signature size: expected 384, got %zu\n", sig_bin.size());
+                continue;
+            }
+
+            std::string pubkey_path = (signer_type == SIGNER_HOSPITAL)
+                ? "hospital_keys/hospital_public.pem"
+                : "lab_keys/lab_public.pem";
+
+            std::vector<uint8_t> pubkey_pem = read_pem_file(pubkey_path);
+            if (pubkey_pem.empty()) {
+                printf("[App] Failed to load PEM public key\n");
+                continue;
+            }
+
+            double result = 0.0;
             ret = ecall_process_stats(
                 eid, &retval,
                 signed_data,
-                signature_b64.c_str(),
+                strlen(signed_data),
+                sig_bin.data(),
                 signer_type,
                 ciphertext,
                 ciphertext_len,
@@ -353,7 +428,9 @@ int main() {
                 IV_SIZE,
                 mac,
                 op_code,
-                &result
+                &result,
+                pubkey_pem.data(),
+                pubkey_pem.size()
             );
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");

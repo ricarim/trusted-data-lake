@@ -17,8 +17,8 @@ extern "C" {
 
 sgx_status_t ecall_generate_and_seal_key(uint8_t* sealed_data, uint32_t sealed_size);
 sgx_status_t ecall_unseal_key(uint8_t* sealed_data, uint32_t sealed_size);
-sgx_status_t ecall_verify_signature(uint8_t* data, size_t data_len, uint8_t* signature, size_t sig_len, int signer_type, int* is_valid);
-sgx_status_t ecall_process_stats(const char* signed_cmd, const char* signature_b64, int signer_type, uint8_t* ciphertext, size_t ciphertext_len, uint8_t* iv, size_t iv_len, uint8_t* mac, int operation_type, double* result);
+sgx_status_t ecall_verify_signature(const char* message, uint8_t* signature, int signer_type, int* is_valid);
+sgx_status_t ecall_process_stats(const char* signed_data, uint32_t signed_data_len, uint8_t* signature_bin, int signer_type, uint8_t* ciphertext, uint32_t ciphertext_len, uint8_t* iv, uint32_t iv_len, uint8_t* mac, int op_code, double* result, uint8_t* pubkey_pem, uint32_t pubkey_len);
 sgx_status_t ecall_encrypt_data(uint8_t* plaintext, size_t plaintext_len, uint8_t* iv, size_t iv_len, uint8_t* ciphertext, uint8_t* mac);
 sgx_status_t ecall_generate_iv(uint8_t* iv, size_t iv_len);
 sgx_status_t ecall_sum(double* data, size_t len, double* result);

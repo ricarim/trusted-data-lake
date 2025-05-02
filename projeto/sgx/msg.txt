@@ -1,0 +1,1 @@
+stat|hospital|mean|gs://enclave_bucket/encrypted.bin

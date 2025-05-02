@@ -187,6 +187,7 @@ int main(int argc, char* argv[]) {
             std::getline(std::cin, gcs_file);
 
             std::string message = "stat|" + client_id + "|" + stat + "|" + gcs_path + ""+gcs_file;
+            std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 
             std::ostringstream cmd;
