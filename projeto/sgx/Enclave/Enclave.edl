@@ -2,12 +2,6 @@ enclave {
     trusted {
         public sgx_status_t ecall_generate_and_seal_key([out, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
         public sgx_status_t ecall_unseal_key([in, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
-        public sgx_status_t ecall_verify_signature(
-            [in, string] const char* message,
-            [in, size=384] uint8_t* signature,
-            int signer_type,
-            [out] int* is_valid
-        );
         public sgx_status_t ecall_process_stats(
             [in, size=signed_data_len] const char* signed_data,
             uint32_t signed_data_len,
@@ -19,9 +13,7 @@ enclave {
             uint32_t iv_len,
             [in, size=16] uint8_t* mac,
             int op_code,
-            [out] double* result,
-            [in, size=pubkey_len] uint8_t* pubkey_pem,
-            uint32_t pubkey_len
+            [out] double* result
         );
         public sgx_status_t ecall_encrypt_data(
             [in, size=plaintext_len] uint8_t* plaintext,

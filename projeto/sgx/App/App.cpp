@@ -405,16 +405,6 @@ int main() {
                 continue;
             }
 
-            std::string pubkey_path = (signer_type == SIGNER_HOSPITAL)
-                ? "hospital_keys/hospital_public.pem"
-                : "lab_keys/lab_public.pem";
-
-            std::vector<uint8_t> pubkey_pem = read_pem_file(pubkey_path);
-            if (pubkey_pem.empty()) {
-                printf("[App] Failed to load PEM public key\n");
-                continue;
-            }
-
             double result = 0.0;
             ret = ecall_process_stats(
                 eid, &retval,
@@ -428,9 +418,7 @@ int main() {
                 IV_SIZE,
                 mac,
                 op_code,
-                &result,
-                pubkey_pem.data(),
-                pubkey_pem.size()
+                &result
             );
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");

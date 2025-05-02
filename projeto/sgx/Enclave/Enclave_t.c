@@ -39,15 +39,6 @@ typedef struct ms_ecall_unseal_key_t {
 	uint32_t ms_sealed_size;
 } ms_ecall_unseal_key_t;
 
-typedef struct ms_ecall_verify_signature_t {
-	sgx_status_t ms_retval;
-	const char* ms_message;
-	size_t ms_message_len;
-	uint8_t* ms_signature;
-	int ms_signer_type;
-	int* ms_is_valid;
-} ms_ecall_verify_signature_t;
-
 typedef struct ms_ecall_process_stats_t {
 	sgx_status_t ms_retval;
 	const char* ms_signed_data;
@@ -61,8 +52,6 @@ typedef struct ms_ecall_process_stats_t {
 	uint8_t* ms_mac;
 	int ms_op_code;
 	double* ms_result;
-	uint8_t* ms_pubkey_pem;
-	uint32_t ms_pubkey_len;
 } ms_ecall_process_stats_t;
 
 typedef struct ms_ecall_encrypt_data_t {
@@ -275,108 +264,6 @@ err:
 	return status;
 }
 
-static sgx_status_t SGX_CDECL sgx_ecall_verify_signature(void* pms)
-{
-	CHECK_REF_POINTER(pms, sizeof(ms_ecall_verify_signature_t));
-	//
-	// fence after pointer checks
-	//
-	sgx_lfence();
-	ms_ecall_verify_signature_t* ms = SGX_CAST(ms_ecall_verify_signature_t*, pms);
-	ms_ecall_verify_signature_t __in_ms;
-	if (memcpy_s(&__in_ms, sizeof(ms_ecall_verify_signature_t), ms, sizeof(ms_ecall_verify_signature_t))) {
-		return SGX_ERROR_UNEXPECTED;
-	}
-	sgx_status_t status = SGX_SUCCESS;
-	const char* _tmp_message = __in_ms.ms_message;
-	size_t _len_message = __in_ms.ms_message_len ;
-	char* _in_message = NULL;
-	uint8_t* _tmp_signature = __in_ms.ms_signature;
-	size_t _len_signature = 384;
-	uint8_t* _in_signature = NULL;
-	int* _tmp_is_valid = __in_ms.ms_is_valid;
-	size_t _len_is_valid = sizeof(int);
-	int* _in_is_valid = NULL;
-	sgx_status_t _in_retval;
-
-	CHECK_UNIQUE_POINTER(_tmp_message, _len_message);
-	CHECK_UNIQUE_POINTER(_tmp_signature, _len_signature);
-	CHECK_UNIQUE_POINTER(_tmp_is_valid, _len_is_valid);
-
-	//
-	// fence after pointer checks
-	//
-	sgx_lfence();
-
-	if (_tmp_message != NULL && _len_message != 0) {
-		_in_message = (char*)malloc(_len_message);
-		if (_in_message == NULL) {
-			status = SGX_ERROR_OUT_OF_MEMORY;
-			goto err;
-		}
-
-		if (memcpy_s(_in_message, _len_message, _tmp_message, _len_message)) {
-			status = SGX_ERROR_UNEXPECTED;
-			goto err;
-		}
-
-		_in_message[_len_message - 1] = '\0';
-		if (_len_message != strlen(_in_message) + 1)
-		{
-			status = SGX_ERROR_UNEXPECTED;
-			goto err;
-		}
-	}
-	if (_tmp_signature != NULL && _len_signature != 0) {
-		if ( _len_signature % sizeof(*_tmp_signature) != 0)
-		{
-			status = SGX_ERROR_INVALID_PARAMETER;
-			goto err;
-		}
-		_in_signature = (uint8_t*)malloc(_len_signature);
-		if (_in_signature == NULL) {
-			status = SGX_ERROR_OUT_OF_MEMORY;
-			goto err;
-		}
-
-		if (memcpy_s(_in_signature, _len_signature, _tmp_signature, _len_signature)) {
-			status = SGX_ERROR_UNEXPECTED;
-			goto err;
-		}
-
-	}
-	if (_tmp_is_valid != NULL && _len_is_valid != 0) {
-		if ( _len_is_valid % sizeof(*_tmp_is_valid) != 0)
-		{
-			status = SGX_ERROR_INVALID_PARAMETER;
-			goto err;
-		}
-		if ((_in_is_valid = (int*)malloc(_len_is_valid)) == NULL) {
-			status = SGX_ERROR_OUT_OF_MEMORY;
-			goto err;
-		}
-
-		memset((void*)_in_is_valid, 0, _len_is_valid);
-	}
-	_in_retval = ecall_verify_signature((const char*)_in_message, _in_signature, __in_ms.ms_signer_type, _in_is_valid);
-	if (memcpy_verw_s(&ms->ms_retval, sizeof(ms->ms_retval), &_in_retval, sizeof(_in_retval))) {
-		status = SGX_ERROR_UNEXPECTED;
-		goto err;
-	}
-	if (_in_is_valid) {
-		if (memcpy_verw_s(_tmp_is_valid, _len_is_valid, _in_is_valid, _len_is_valid)) {
-			status = SGX_ERROR_UNEXPECTED;
-			goto err;
-		}
-	}
-
-err:
-	if (_in_message) free(_in_message);
-	if (_in_signature) free(_in_signature);
-	if (_in_is_valid) free(_in_is_valid);
-	return status;
-}
-
 static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_ecall_process_stats_t));
@@ -411,10 +298,6 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 	double* _tmp_result = __in_ms.ms_result;
 	size_t _len_result = sizeof(double);
 	double* _in_result = NULL;
-	uint8_t* _tmp_pubkey_pem = __in_ms.ms_pubkey_pem;
-	uint32_t _tmp_pubkey_len = __in_ms.ms_pubkey_len;
-	size_t _len_pubkey_pem = _tmp_pubkey_len;
-	uint8_t* _in_pubkey_pem = NULL;
 	sgx_status_t _in_retval;
 
 	CHECK_UNIQUE_POINTER(_tmp_signed_data, _len_signed_data);
@@ -423,7 +306,6 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 	CHECK_UNIQUE_POINTER(_tmp_iv, _len_iv);
 	CHECK_UNIQUE_POINTER(_tmp_mac, _len_mac);
 	CHECK_UNIQUE_POINTER(_tmp_result, _len_result);
-	CHECK_UNIQUE_POINTER(_tmp_pubkey_pem, _len_pubkey_pem);
 
 	//
 	// fence after pointer checks
@@ -533,25 +415,7 @@ static sgx_status_t SGX_CDECL sgx_ecall_process_stats(void* pms)
 
 		memset((void*)_in_result, 0, _len_result);
 	}
-	if (_tmp_pubkey_pem != NULL && _len_pubkey_pem != 0) {
-		if ( _len_pubkey_pem % sizeof(*_tmp_pubkey_pem) != 0)
-		{
-			status = SGX_ERROR_INVALID_PARAMETER;
-			goto err;
-		}
-		_in_pubkey_pem = (uint8_t*)malloc(_len_pubkey_pem);
-		if (_in_pubkey_pem == NULL) {
-			status = SGX_ERROR_OUT_OF_MEMORY;
-			goto err;
-		}
-
-		if (memcpy_s(_in_pubkey_pem, _len_pubkey_pem, _tmp_pubkey_pem, _len_pubkey_pem)) {
-			status = SGX_ERROR_UNEXPECTED;
-			goto err;
-		}
-
-	}
-	_in_retval = ecall_process_stats((const char*)_in_signed_data, _tmp_signed_data_len, _in_signature_bin, __in_ms.ms_signer_type, _in_ciphertext, _tmp_ciphertext_len, _in_iv, _tmp_iv_len, _in_mac, __in_ms.ms_op_code, _in_result, _in_pubkey_pem, _tmp_pubkey_len);
+	_in_retval = ecall_process_stats((const char*)_in_signed_data, _tmp_signed_data_len, _in_signature_bin, __in_ms.ms_signer_type, _in_ciphertext, _tmp_ciphertext_len, _in_iv, _tmp_iv_len, _in_mac, __in_ms.ms_op_code, _in_result);
 	if (memcpy_verw_s(&ms->ms_retval, sizeof(ms->ms_retval), &_in_retval, sizeof(_in_retval))) {
 		status = SGX_ERROR_UNEXPECTED;
 		goto err;
@@ -570,7 +434,6 @@ err:
 	if (_in_iv) free(_in_iv);
 	if (_in_mac) free(_in_mac);
 	if (_in_result) free(_in_result);
-	if (_in_pubkey_pem) free(_in_pubkey_pem);
 	return status;
 }
 
@@ -1391,13 +1254,12 @@ err:
 
 SGX_EXTERNC const struct {
 	size_t nr_ecall;
-	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[14];
+	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[13];
 } g_ecall_table = {
-	14,
+	13,
 	{
 		{(void*)(uintptr_t)sgx_ecall_generate_and_seal_key, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_unseal_key, 0, 0},
-		{(void*)(uintptr_t)sgx_ecall_verify_signature, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_process_stats, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_encrypt_data, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_generate_iv, 0, 0},
@@ -1414,16 +1276,16 @@ SGX_EXTERNC const struct {
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[6][14];
+	uint8_t entry_table[6][13];
 } g_dyn_entry_table = {
 	6,
 	{
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 	}
 };
 
