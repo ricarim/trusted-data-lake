@@ -14,7 +14,6 @@
 #include <openssl/evp.h>
 #include <sgx_report.h>
 #include <sgx_ql_quote.h>
-#include "sgx_dcap_ql_wrapper.h"
 #include <sgx_ql_lib_common.h>
 #include "Enclave_u.h"
 
@@ -261,25 +260,6 @@ int main() {
         printf("Error creating enclave: 0x%x\n", ret);
         return -1;
     }
-
-    uint8_t target_info[TARGET_INFO_SIZE] = {0};
-    uint8_t report[REPORT_SIZE] = {0};
-
-    sgx_target_info_t* p_target_info = (sgx_target_info_t*)target_info;
-    sgx_ret = sgx_qe_get_target_info(p_target_info);
-    if (sgx_ret != SGX_SUCCESS) {
-        printf("sgx_qe_get_target_info falhou: 0x%x\n", sgx_ret);
-        return -1;
-    }
-
-    sgx_ret = ecall_create_report(eid, target_info, report);
-    if (sgx_ret != SGX_SUCCESS) {
-        printf("ecall_create_report falhou: 0x%x\n", sgx_ret);
-        return -1;
-    }
-
-    printf("Report SGX criado com sucesso!\n");
-
 
 
     uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
