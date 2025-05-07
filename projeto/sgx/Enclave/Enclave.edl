@@ -32,6 +32,9 @@ enclave {
         public sgx_status_t ecall_mode([in, size=len] double* data, size_t len, [out] double* result);
         public sgx_status_t ecall_variance([in, size=len] double* data, size_t len, [out] double* result);
         public sgx_status_t ecall_stddev([in, size=len] double* data, size_t len, [out] double* result);
+        public sgx_status_t ecall_create_report([in, size=512] uint8_t* target_info_buf, [out, size=432] uint8_t* report_buf);
+
+
     };
 
     untrusted {

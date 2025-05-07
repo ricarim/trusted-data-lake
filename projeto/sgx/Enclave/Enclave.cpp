@@ -10,10 +10,12 @@
 #include "sgx_tcrypto.h"
 #include <cstring>
 #include <sstream>
-#include <sgx_trts.h>
 #include <stdint.h>
-#include <sgx_tseal.h>
 #include <stdbool.h>
+#include "sgx_trts.h"
+#include "sgx_tseal.h"
+#include "sgx_report.h"
+#include "sgx_utils.h"
 #include <map>
 #include <numeric>  
 #include <cmath>    
@@ -22,7 +24,6 @@
 #define SYM_KEY_SIZE 32 
 #define IV_SIZE 12       // AES-GCM IV 
 #define TAG_SIZE 16      // AES-GCM tag
-
 
 static sgx_aes_gcm_128bit_key_t g_sym_key;
 static bool g_sym_key_ready = false;
@@ -61,10 +62,16 @@ const char* get_signer_public_key(int signer_type) {
     }
 }
 
-typedef enum {
-    SIGNER_HOSPITAL = 0,
-    SIGNER_LAB = 1
-} signer_t;
+sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) {
+    if (!target_info_buf || !report_buf) return SGX_ERROR_INVALID_PARAMETER;
+
+    const sgx_target_info_t* target_info = reinterpret_cast<const sgx_target_info_t*>(target_info_buf);
+    sgx_report_t* report = reinterpret_cast<sgx_report_t*>(report_buf);
+
+    sgx_report_data_t report_data = { 0 };
+    return sgx_create_report(target_info, &report_data, report);
+}
+
 
 bool verify_signature(const std::string& message, const std::vector<uint8_t>& signature, const std::vector<uint8_t>& pubkey_buf) {
     EVP_PKEY* pkey = nullptr;

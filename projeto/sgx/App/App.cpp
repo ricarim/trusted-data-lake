@@ -12,6 +12,10 @@
 #include <vector>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <sgx_report.h>
+#include <sgx_ql_quote.h>
+#include "sgx_dcap_ql_wrapper.h"
+#include <sgx_ql_lib_common.h>
 #include "Enclave_u.h"
 
 #define ENCLAVE_FILE "enclave.signed.so"
@@ -38,6 +42,9 @@
 #define STAT_VARIANCE 7
 #define STAT_STDDEV 8
 
+#define TARGET_INFO_SIZE 512
+#define REPORT_SIZE 432
+
 sgx_enclave_id_t eid = 0;
 
 // OCALL that enclave calls
@@ -56,7 +63,6 @@ std::vector<uint8_t> read_pem_file(const std::string& path) {
     fclose(f);
     return buffer;
 }
-
 
 void ocall_request_authorization(const char* message, int* authorized) {
     printf("[App] Authorization request: %s\n", message);
@@ -95,6 +101,7 @@ void ocall_request_authorization(const char* message, int* authorized) {
         *authorized = 0;
     }
 }
+
 
 std::vector<uint8_t> base64_decode(const std::string& encoded) {
     BIO* b64 = BIO_new(BIO_f_base64());
@@ -241,6 +248,7 @@ bool is_remote_newer(const char* gcs_uri, const char* local_path) {
 
 int main() {
     sgx_status_t ret,retval;
+    sgx_status_t sgx_ret;
 
     remove(PIPE_PATH);
     remove(RESPONSE_PIPE);
@@ -253,6 +261,26 @@ int main() {
         printf("Error creating enclave: 0x%x\n", ret);
         return -1;
     }
+
+    uint8_t target_info[TARGET_INFO_SIZE] = {0};
+    uint8_t report[REPORT_SIZE] = {0};
+
+    sgx_target_info_t* p_target_info = (sgx_target_info_t*)target_info;
+    sgx_ret = sgx_qe_get_target_info(p_target_info);
+    if (sgx_ret != SGX_SUCCESS) {
+        printf("sgx_qe_get_target_info falhou: 0x%x\n", sgx_ret);
+        return -1;
+    }
+
+    sgx_ret = ecall_create_report(eid, target_info, report);
+    if (sgx_ret != SGX_SUCCESS) {
+        printf("ecall_create_report falhou: 0x%x\n", sgx_ret);
+        return -1;
+    }
+
+    printf("Report SGX criado com sucesso!\n");
+
+
 
     uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
     uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
