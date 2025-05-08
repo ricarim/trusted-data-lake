@@ -25,6 +25,12 @@ enclave {
             [out, size=plaintext_len] uint8_t* ciphertext,
             [out, size=16] uint8_t* mac
         );
+        public sgx_status_t ecall_process_encrypt(
+            [in, size=signed_data_len] const char* signed_data,
+            uint32_t signed_data_len,
+            [in, size=signature_len] const uint8_t* signature,
+            uint32_t signature_len
+        );
         public sgx_status_t ecall_generate_iv([out, size=iv_len] uint8_t* iv, size_t iv_len);
         public sgx_status_t ecall_sum([in, size=len] double* data, size_t len, [out] double* result);
         public sgx_status_t ecall_mean([in, size=len] double* data, size_t len, [out] double* result);
@@ -41,6 +47,7 @@ enclave {
 
     untrusted {
         void ocall_printf([in, string] const char* str);
+        void ocall_get_time([out] uint64_t* t);
 
         void sgx_thread_wait_untrusted_event_ocall([in, size=1] void* self);
         void sgx_thread_set_untrusted_event_ocall([in, size=1] void* waiter);

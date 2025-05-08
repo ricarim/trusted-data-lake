@@ -1,5 +1,7 @@
+#include <cstdint>
 #include <string>
 #include <cctype>
+#include <ctime>
 #include <openssl/evp.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
@@ -265,6 +267,71 @@ sgx_status_t ecall_stddev(double* data, size_t len, double* result) {
 }
 
 
+sgx_status_t ecall_process_encrypt(
+    const char* signed_data,
+    uint32_t signed_data_len,
+    const uint8_t* signature,
+    uint32_t signature_len
+) {
+    if (!signed_data || !signature || signature_len != 384)
+        return SGX_ERROR_INVALID_PARAMETER;
+
+    std::string msg_str(signed_data, signed_data_len);
+
+    // Split the signed message
+    std::vector<std::string> parts;
+    std::istringstream iss(msg_str);
+    std::string token;
+    while (std::getline(iss, token, '|')) {
+        parts.push_back(token);
+    }
+
+    if (parts.size() != 5) {
+        ocall_printf("[Enclave] Invalid encrypt message format. Expected 5 parts.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // Parse and validate timestamp
+    uint64_t received_ts;
+    try {
+        received_ts = std::stoull(parts[4]);
+    } catch (...) {
+        ocall_printf("[Enclave] Failed to parse timestamp.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    uint64_t now = 0;
+    ocall_get_time(&now);
+
+    if (std::abs((int64_t)(now - received_ts)) > 300) {
+        ocall_printf("[Enclave] Timestamp is too old or in the future. Possible replay.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // Determine signer and get public key
+    std::string signer = parts[1];
+    const char* pem_cstr = nullptr;
+    if (signer == "hospital") pem_cstr = hospital_public_pem;
+    else if (signer == "lab") pem_cstr = lab_public_pem;
+    else {
+        ocall_printf("[Enclave] Unknown signer ID.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    std::vector<uint8_t> pem_vec(pem_cstr, pem_cstr + strlen(pem_cstr));
+    std::vector<uint8_t> sig_vec(signature, signature + signature_len);
+
+    // Verify signature
+    if (!verify_signature(msg_str, sig_vec, pem_vec)) {
+        ocall_printf("[Enclave] Signature verification failed for encrypt.\n");
+        return SGX_ERROR_INVALID_SIGNATURE;
+    }
+
+    ocall_printf("[Enclave] Signature and timestamp are valid. Encrypt approved.\n");
+    return SGX_SUCCESS;
+}
+
+
 
 enum StatOp {
     STAT_SUM = 1,
@@ -301,6 +368,35 @@ sgx_status_t ecall_process_stats(
     }
 
     std::string msg_str(signed_data, signed_data_len);
+
+    // Verify timestamp
+    std::vector<std::string> parts;
+    std::istringstream iss(msg_str);
+    std::string token;
+    while (std::getline(iss, token, '|')) {
+        parts.push_back(token);
+    }
+
+    if (parts.size() != 5) {
+        ocall_printf("[Enclave] Invalid signed message format. Expected 5 parts.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    uint64_t received_ts;
+    try {
+        received_ts = std::stol(parts[4]);
+    } catch (...) {
+        ocall_printf("[Enclave] Failed to parse timestamp.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    uint64_t now = 0;
+    ocall_get_time(&now);
+    if (std::abs((int64_t)(now - received_ts)) > 300) { // 5 min tolerance
+        ocall_printf("[Enclave] Timestamp out of range. Possible replay attack.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
     std::vector<uint8_t> sig1_vec(sig1, sig1 + sig1_len);
     std::vector<uint8_t> sig2_vec(sig2, sig2 + sig2_len);
 
@@ -316,7 +412,6 @@ sgx_status_t ecall_process_stats(
     }
 
     ocall_printf("[Enclave] Both signatures verified successfully.\n");
-
 
     std::vector<uint8_t> plaintext(ciphertext_len);
     sgx_status_t ret = sgx_rijndael128GCM_decrypt(

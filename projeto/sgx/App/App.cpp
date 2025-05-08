@@ -1,6 +1,10 @@
 #include <stdio.h>
+#include <fstream>
+#include <sstream>
 #include <iostream>
 #include <fcntl.h>
+#include <ctime>
+#include <cstdint>
 #include <sgx_error.h>
 #include <sgx_tseal.h>
 #include <unistd.h>
@@ -65,15 +69,16 @@ std::vector<uint8_t> read_pem_file(const std::string& path) {
 std::vector<uint8_t> base64_decode(const std::string& encoded) {
     BIO* b64 = BIO_new(BIO_f_base64());
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
     BIO* mem = BIO_new_mem_buf(encoded.data(), encoded.size());
-    mem = BIO_push(b64, mem);
+    BIO* bio_chain = BIO_push(b64, mem);
 
     std::vector<uint8_t> decoded(encoded.size()); 
-    int len = BIO_read(mem, decoded.data(), decoded.size());
+    int len = BIO_read(bio_chain, decoded.data(), decoded.size());
     if (len < 0) len = 0;
     decoded.resize(len);
 
-    BIO_free_all(mem);
+    BIO_free_all(bio_chain);
     return decoded;
 }
 
@@ -204,6 +209,10 @@ bool is_remote_newer(const char* gcs_uri, const char* local_path) {
     return remote_time > local_time;
 }
 
+void ocall_get_time(uint64_t* t) {
+    if (t) *t = static_cast<uint64_t>(time(nullptr));
+}
+
 
 int main() {
     sgx_status_t ret,retval;
@@ -253,7 +262,7 @@ int main() {
     if (access(RESPONSE_PIPE, F_OK) != 0)
         mkfifo(RESPONSE_PIPE, 0666);
 
-    int pipe_fd = open(PIPE_PATH, O_RDWR);
+    int pipe_fd = open(PIPE_PATH, O_RDONLY);
     if (pipe_fd < 0) {
         perror("open pipe");
         return 1;
@@ -263,7 +272,7 @@ int main() {
     printf("[App] SGX App is running. Waiting for commands...\n");
 
 
-    char input[1024];
+    char input[4096];
     while (fgets(input, sizeof(input), pipe)) {
         input[strcspn(input, "\n")] = 0;
         if (strcmp(input, "exit") == 0) break;
@@ -275,17 +284,34 @@ int main() {
             tok = strtok(nullptr, "|");
         }
         
-        printf("[App] Tokens found: %zu\n", tokens.size());
-        for (size_t i = 0; i < tokens.size(); ++i)
-            printf("[App] Token[%zu]: %s\n", i, tokens[i].c_str());
 
-
-
-        if (tokens.size() == 5 && tokens[0] == "encrypt") {
+        if (tokens.size() == 6 && tokens[0] == "encrypt") {
             std::string signer = tokens[1];
             std::string filename = tokens[2];
             std::string gcs_path = tokens[3];
-            std::string signature_b64 = tokens[4];
+            std::string timestamp = tokens[4];
+            std::string signature_b64 = tokens[5];
+
+            std::string signed_data = "encrypt|" + signer + "|" + filename + "|" + gcs_path + "|" + timestamp;
+
+            std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
+            if (sig_bin.size() != 384) {
+                printf("[App] Invalid signature size.\n");
+                continue;
+            }
+
+            sgx_status_t verify_ret;
+            ret = ecall_process_encrypt(
+                eid, &verify_ret,
+                signed_data.c_str(), signed_data.size(),
+                sig_bin.data(), sig_bin.size()
+            );
+
+            if (ret != SGX_SUCCESS || verify_ret != SGX_SUCCESS) {
+                printf("[App] Signature or timestamp invalid. Aborting encryption.\n");
+                continue;
+            }
+
 
             size_t plaintext_len;
             char* plaintext = read_file(filename.c_str(), &plaintext_len);
@@ -323,12 +349,13 @@ int main() {
                 printf("[App] Upload successful\n");
             else
                 printf("[App] Upload failed\n");
-        } else if (tokens.size() == 6 && tokens[0] == "stat") {
+        } else if (tokens.size() == 7 && tokens[0] == "stat") {
             std::string signer = tokens[1];
             std::string operation = tokens[2];
             std::string gcs_path = tokens[3];
-            std::string signature1_b64 = tokens[4];
-            std::string signature2_b64 = tokens[5];
+            std::string timestamp = tokens[4];
+            std::string signature1_b64 = tokens[5];
+            std::string signature2_b64 = tokens[6];
 
             int signer_type = (signer == "hospital") ? SIGNER_HOSPITAL : SIGNER_LAB;
 
@@ -361,7 +388,7 @@ int main() {
             else if (operation == "stddev") op_code = STAT_STDDEV;
 
             char signed_data[512];
-            snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str());
+            snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str(), timestamp.c_str());
 
             std::vector<uint8_t> sig1_bin = base64_decode(signature1_b64);
             std::vector<uint8_t> sig2_bin = base64_decode(signature2_b64);

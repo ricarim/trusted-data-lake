@@ -1,4 +1,5 @@
 #include <openssl/evp.h>
+#include <algorithm>
 #include <openssl/pem.h>
 #include <openssl/sha.h>
 #include <openssl/err.h>
@@ -59,15 +60,17 @@ std::string sign_message(const std::string& message, EVP_PKEY* pkey) {
     BIO* b64 = BIO_new(BIO_f_base64());
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     BIO* mem = BIO_new(BIO_s_mem());
-    b64 = BIO_push(b64, mem);
-    BIO_write(b64, sig.data(), sig_len);
-    BIO_flush(b64);
+    BIO* bio_chain = BIO_push(b64, mem);
+
+
+    BIO_write(bio_chain, sig.data(), sig_len);
+    BIO_flush(bio_chain);
 
     BUF_MEM* bptr;
     BIO_get_mem_ptr(mem, &bptr);
     std::string b64sig(bptr->data, bptr->length);  // remove \0
 
-    BIO_free_all(b64);
+    BIO_free_all(bio_chain);
     return b64sig;
 }
 
@@ -145,8 +148,18 @@ int main(int argc, char* argv[]) {
             std::cout << "Enter CSV file name: ";
             std::getline(std::cin, filename);
 
-            std::string message = "encrypt|" + client_id + "|" + filename + "|" + gcs_path;
+            time_t now = time(nullptr);
+            std::string message = "encrypt|" + client_id + "|" + filename + "|" + gcs_path + "|" + std::to_string(now);
+            std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
+
+            auto sanitize = [](std::string& s) {
+                s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+                s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
+                s.erase(std::remove(s.begin(), s.end(), ' '), s.end());
+            };
+            sanitize(sig);
+
             std::ostringstream cmd;
             cmd << "ssh localhost \"echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
             system(cmd.str().c_str());
@@ -163,14 +176,29 @@ int main(int argc, char* argv[]) {
             std::cout << "Enter GCS file: ";
             std::getline(std::cin, gcs_file);
 
-            std::string message = "stat|" + client_id + "|" + stat + "|" + gcs_path + ""+gcs_file;
+            time_t now = time(nullptr);
+            std::string message = "stat|" + client_id + "|" + stat + "|" + gcs_path + ""+gcs_file + "|" + std::to_string(now);
             std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 
-            std::string other_sig;
-            std::cout << "Enter signature from " << other_id(client_id) << ": ";
-            std::getline(std::cin, other_sig);
+            std::string sig_path;
+            std::cout << "Enter path to other party's signature file: ";
+            std::getline(std::cin, sig_path);
 
+            std::ifstream f(sig_path);
+            std::stringstream buf;
+            buf << f.rdbuf();
+            std::string other_sig = buf.str();
+
+            auto sanitize = [](std::string& s) {
+                s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+                s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
+                s.erase(std::remove(s.begin(), s.end(), ' '), s.end());
+            };
+            sanitize(sig);
+            sanitize(other_sig);
+
+            std::string full_msg = message + "|" + sig + "|" + other_sig;
 
             std::ostringstream cmd;
             cmd << "ssh localhost \"echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
