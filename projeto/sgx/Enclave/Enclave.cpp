@@ -249,6 +249,33 @@ sgx_status_t ecall_mode(double* data, size_t len, double* result) {
     return SGX_SUCCESS;
 }
 
+sgx_status_t ecall_mode_string(const char** data, size_t len, char* result_buf, size_t buf_size) {
+    if (!data || len == 0 || !result_buf || buf_size == 0) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    std::map<std::string, int> freq;
+    for (size_t i = 0; i < len; ++i) {
+        freq[data[i]]++;
+    }
+
+    std::string mode;
+    int max_count = 0;
+    for (const auto& kv : freq) {
+        if (kv.second > max_count) {
+            max_count = kv.second;
+            mode = kv.first;
+        }
+    }
+
+    if (mode.empty() || mode.size() + 1 > buf_size) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    strncpy(result_buf, mode.c_str(), buf_size);
+    return SGX_SUCCESS;
+}
+
 sgx_status_t ecall_variance(double* data, size_t len, double* result) {
     if (!data || !result || len == 0) return SGX_ERROR_INVALID_PARAMETER;
     std::vector<double> v(data, data + len);
@@ -356,10 +383,13 @@ sgx_status_t ecall_process_stats(
     const uint8_t* iv,
     uint32_t iv_len,
     const uint8_t* mac,
+    const char* column_name,
     int op_code,
+    char* out_mode_buf, 
+    uint32_t out_mode_buf_len,
     double* result
 ){
-    if (!signed_data || !sig1 || !sig2 || !ciphertext || !iv || !mac || !result)
+    if (!signed_data || !sig1 || !sig2 || !ciphertext || !iv || !mac || !result || !column_name)
     return SGX_ERROR_INVALID_PARAMETER;
 
     if (!g_sym_key_ready) {
@@ -451,37 +481,55 @@ sgx_status_t ecall_process_stats(
         records.push_back(r);
     }
 
-    std::vector<double> ages;
+    std::vector<double> numbers;
+    std::vector<std::string> strings;
+
     for (const auto& row : records) {
-        auto it = row.find("age");
+        auto it = row.find(column_name);
         if (it != row.end()) {
             try {
-                double age = std::stod(it->second);
-                ages.push_back(age);
-            } catch (...) {}
+                double val = std::stod(it->second);
+                numbers.push_back(val);
+            } catch (...) {
+                strings.push_back(it->second);
+            }
         }
     }
 
-    if (ages.empty()) return SGX_ERROR_INVALID_PARAMETER;
+    if (numbers.empty() && strings.empty()) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
 
     // Choose and execute statistical operation
     switch (op_code) {
         case STAT_MEAN:
-            return ecall_mean(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_mean(numbers.data(), numbers.size(), result);
         case STAT_VARIANCE:
-            return ecall_variance(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_variance(numbers.data(), numbers.size(), result);
         case STAT_STDDEV:
-            return ecall_stddev(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_stddev(numbers.data(), numbers.size(), result);
         case STAT_SUM:
-            return ecall_sum(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_sum(numbers.data(), numbers.size(), result);
         case STAT_MIN:
-            return ecall_min(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_min(numbers.data(), numbers.size(), result);
         case STAT_MAX:
-            return ecall_max(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_max(numbers.data(), numbers.size(), result);
         case STAT_MEDIAN:
-            return ecall_median(ages.data(), ages.size(), result);
+            return numbers.empty() ? SGX_ERROR_INVALID_PARAMETER : ecall_median(numbers.data(), numbers.size(), result);
         case STAT_MODE:
-            return ecall_mode(ages.data(), ages.size(), result);
+            if (!numbers.empty()) {
+                return ecall_mode(numbers.data(), numbers.size(), result);
+            } else if (!strings.empty()) {
+                std::vector<const char*> cstrs;
+                for (const auto& s : strings) cstrs.push_back(s.c_str());
+
+                char mode_buf[64] = {0};
+                sgx_status_t ret = ecall_mode_string(cstrs.data(), cstrs.size(), mode_buf, sizeof(mode_buf));
+                memcpy(out_mode_buf, mode_buf, min(strlen(mode_buf)+1, out_mode_buf_len));
+                return ret;
+            } else {
+                return SGX_ERROR_INVALID_PARAMETER;
+            }
         default:
             return SGX_ERROR_INVALID_PARAMETER;
     }

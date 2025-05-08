@@ -398,6 +398,20 @@ int main() {
                 continue;
             }
 
+
+            static const std::vector<std::string> categorical_columns = {
+                "gender",
+                "diagnosis",
+                "exam_type"
+            };
+
+            bool is_categorical = (op_code == STAT_MODE) &&
+                (std::find(categorical_columns.begin(),
+                           categorical_columns.end(),
+                           column) != categorical_columns.end());
+
+            const char* column = "age";
+            char mode_buf[64];
             double result = 0.0;
             ret = ecall_process_stats(
                 eid, &retval,
@@ -408,15 +422,22 @@ int main() {
                 ciphertext, ciphertext_len,
                 iv, IV_SIZE,
                 mac,
+                column,
                 op_code,
+                mode_buf, sizeof(mode_buf),
                 &result
             );
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");
             if (resp) {
-                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS)
-                    fprintf(resp, "[App] Authorization granted\n[App] Result: %.2f\n", result);
-                else if (retval == MY_ERROR_ACCESS_DENIED)
+                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS){
+                        fprintf(resp, "[App] Authorization granted\n");
+                    if (is_categorical) {
+                        fprintf(resp, "[App] Most frequent value is %s\n", mode_buf);
+                    } else {
+                        fprintf(resp, "[App] Result: %.2f\n", result);
+                    }
+                }else if (retval == MY_ERROR_ACCESS_DENIED)
                     fprintf(resp, "[App] Authorization denied\n");
                 else
                     fprintf(resp, "[App] Computation failed\n");

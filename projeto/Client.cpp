@@ -176,6 +176,10 @@ int main(int argc, char* argv[]) {
             std::cout << "Enter GCS file: ";
             std::getline(std::cin, gcs_file);
 
+            std::string column;
+            std::cout << "Enter the column name (e.g., 'age', 'gender'): ";
+            std::getline(std::cin, column);  
+
             time_t now = time(nullptr);
             std::string message = "stat|" + client_id + "|" + stat + "|" + gcs_path + ""+gcs_file + "|" + std::to_string(now);
             std::cout << "message: " << message << "\n";

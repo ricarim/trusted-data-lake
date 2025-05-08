@@ -14,7 +14,10 @@ enclave {
             [in, size=iv_len] const uint8_t* iv,
             uint32_t iv_len,
             [in, size=16] const uint8_t* mac,
+            [in, string] const char* column_name,
             int op_code,
+            [out, size=out_mode_buf_len] char* out_mode_buf,
+            uint32_t out_mode_buf_len,
             [out] double* result
         );
         public sgx_status_t ecall_encrypt_data(
