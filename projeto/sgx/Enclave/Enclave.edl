@@ -5,13 +5,15 @@ enclave {
         public sgx_status_t ecall_process_stats(
             [in, size=signed_data_len] const char* signed_data,
             uint32_t signed_data_len,
-            [in, size=384] uint8_t* signature_bin,
-            int signer_type,
-            [in, size=ciphertext_len] uint8_t* ciphertext,
+            [in, size=sig1_len] const uint8_t* sig1,
+            uint32_t sig1_len,
+            [in, size=sig2_len] const uint8_t* sig2,
+            uint32_t sig2_len,
+            [in, size=ciphertext_len] const uint8_t* ciphertext,
             uint32_t ciphertext_len,
-            [in, size=iv_len] uint8_t* iv,
+            [in, size=iv_len] const uint8_t* iv,
             uint32_t iv_len,
-            [in, size=16] uint8_t* mac,
+            [in, size=16] const uint8_t* mac,
             int op_code,
             [out] double* result
         );
@@ -39,8 +41,6 @@ enclave {
 
     untrusted {
         void ocall_printf([in, string] const char* str);
-        void ocall_request_authorization([in, string] const char* msg, [out] int* authorized);
-
 
         void sgx_thread_wait_untrusted_event_ocall([in, size=1] void* self);
         void sgx_thread_set_untrusted_event_ocall([in, size=1] void* waiter);

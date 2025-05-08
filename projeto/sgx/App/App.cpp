@@ -26,8 +26,6 @@
 
 #define PIPE_PATH "/tmp/sgx_pipe"
 #define RESPONSE_PIPE "/tmp/sgx_response"
-#define AUTH_REQUEST_FILE "/tmp/sgx_auth_request"
-#define AUTH_RESPONSE_FILE "/tmp/sgx_authorization"
 
 #define SIGNER_HOSPITAL 0
 #define SIGNER_LAB 1
@@ -61,44 +59,6 @@ std::vector<uint8_t> read_pem_file(const std::string& path) {
     fread(buffer.data(), 1, size, f);
     fclose(f);
     return buffer;
-}
-
-void ocall_request_authorization(const char* message, int* authorized) {
-    printf("[App] Authorization request: %s\n", message);
-
-    // Write the request to the file
-    FILE* req_file = fopen("/tmp/sgx_auth_request", "w");
-    if (req_file) {
-        fprintf(req_file, "%s\n", message);
-        fclose(req_file);
-    } else {
-        printf("[App] Failed to write auth request file.\n");
-        *authorized = 0;
-        return;
-    }
-
-    // Wait for the response to be written by the client
-    printf("[App] Waiting for authorization response...\n");
-    while (access("/tmp/sgx_authorization", F_OK) != 0) {
-        sleep(1);    // Wait until client writes
-    }
-
-    // Read the response
-    FILE* approval_file = fopen("/tmp/sgx_authorization", "r");
-    if (approval_file) {
-        char response[16];
-        fgets(response, sizeof(response), approval_file);
-        fclose(approval_file);
-        remove("/tmp/sgx_authorization");
-        remove("/tmp/sgx_auth_request");
-
-        response[strcspn(response, "\n")] = 0;
-        *authorized = (strcmp(response, "yes") == 0);
-        printf("[App] Authorization result: %s\n", response);
-    } else {
-        printf("[App] Failed to read authorization response.\n");
-        *authorized = 0;
-    }
 }
 
 
@@ -251,8 +211,6 @@ int main() {
 
     remove(PIPE_PATH);
     remove(RESPONSE_PIPE);
-    remove(AUTH_REQUEST_FILE);
-    remove(AUTH_RESPONSE_FILE);
 
     // Create enclave
     ret = sgx_create_enclave(ENCLAVE_FILE, SGX_DEBUG_FLAG, NULL, NULL, &eid, NULL);
@@ -365,11 +323,12 @@ int main() {
                 printf("[App] Upload successful\n");
             else
                 printf("[App] Upload failed\n");
-        } else if (tokens.size() == 5 && tokens[0] == "stat") {
+        } else if (tokens.size() == 6 && tokens[0] == "stat") {
             std::string signer = tokens[1];
             std::string operation = tokens[2];
             std::string gcs_path = tokens[3];
-            std::string signature_b64 = tokens[4];
+            std::string signature1_b64 = tokens[4];
+            std::string signature2_b64 = tokens[5];
 
             int signer_type = (signer == "hospital") ? SIGNER_HOSPITAL : SIGNER_LAB;
 
@@ -404,12 +363,11 @@ int main() {
             char signed_data[512];
             snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str());
 
-            std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
-            printf("[App] Decoded signature length: %zu\n", sig_bin.size());
-            for (int i = 0; i < 8; ++i)
-                printf("sig_bin[%d] = 0x%02X\n", i, sig_bin[i]);
-            if (sig_bin.size() != 384) {
-                printf("[App] Invalid signature size: expected 384, got %zu\n", sig_bin.size());
+            std::vector<uint8_t> sig1_bin = base64_decode(signature1_b64);
+            std::vector<uint8_t> sig2_bin = base64_decode(signature2_b64);
+
+            if (sig1_bin.size() != 384 || sig2_bin.size() != 384) {
+                printf("[App] One or both signatures are invalid size (expected 384 bytes)\n");
                 continue;
             }
 
@@ -418,12 +376,10 @@ int main() {
                 eid, &retval,
                 signed_data,
                 strlen(signed_data),
-                sig_bin.data(),
-                signer_type,
-                ciphertext,
-                ciphertext_len,
-                iv,
-                IV_SIZE,
+                sig1_bin.data(), sig1_bin.size(),
+                sig2_bin.data(), sig2_bin.size(),
+                ciphertext, ciphertext_len,
+                iv, IV_SIZE,
                 mac,
                 op_code,
                 &result

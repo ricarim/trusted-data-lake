@@ -54,13 +54,6 @@ const char lab_public_pem[] =
 "dg3OycBKA3BQ9rdmuloJOKiKdiE6InvWihqGuvnRNFM5AgMBAAE=\n"
 "-----END PUBLIC KEY-----\n";
 
-const char* get_signer_public_key(int signer_type) {
-    switch (signer_type) {
-        case 0: return hospital_public_pem;
-        case 1: return lab_public_pem;
-        default: return nullptr;
-    }
-}
 
 sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) {
     if (!target_info_buf || !report_buf) return SGX_ERROR_INVALID_PARAMETER;
@@ -287,47 +280,47 @@ enum StatOp {
 sgx_status_t ecall_process_stats(
     const char* signed_data,
     uint32_t signed_data_len,
-    uint8_t* signature_bin,
-    int signer_type,
-    uint8_t* ciphertext,
+    const uint8_t* sig1,
+    uint32_t sig1_len,
+    const uint8_t* sig2,
+    uint32_t sig2_len,
+    const uint8_t* ciphertext,
     uint32_t ciphertext_len,
-    uint8_t* iv,
+    const uint8_t* iv,
     uint32_t iv_len,
-    uint8_t* mac,
+    const uint8_t* mac,
     int op_code,
     double* result
-) {
-    if (!signed_data || !signature_bin || !ciphertext || !iv || !mac || !result)
-        return SGX_ERROR_INVALID_PARAMETER;
+){
+    if (!signed_data || !sig1 || !sig2 || !ciphertext || !iv || !mac || !result)
+    return SGX_ERROR_INVALID_PARAMETER;
 
-    const char* pem_cstr = get_signer_public_key(signer_type);
-    if (!pem_cstr) {
-        ocall_printf("[Enclave] Unknown signer type\n");
-        return SGX_ERROR_INVALID_PARAMETER;
+    if (!g_sym_key_ready) {
+        ocall_printf("[Enclave] Symmetric key not ready.\n");
+        return SGX_ERROR_UNEXPECTED;
     }
 
     std::string msg_str(signed_data, signed_data_len);
-    std::vector<uint8_t> sig_vec(signature_bin, signature_bin + 384);
+    std::vector<uint8_t> sig1_vec(sig1, sig1 + sig1_len);
+    std::vector<uint8_t> sig2_vec(sig2, sig2 + sig2_len);
 
-    std::vector<uint8_t> pem_vec(pem_cstr, pem_cstr + strlen(pem_cstr));
-    if (!verify_signature(msg_str, sig_vec, pem_vec)) {
-        ocall_printf("[Enclave] Signature verification FAILED\n");
+    std::vector<uint8_t> pub1(hospital_public_pem, hospital_public_pem + strlen(hospital_public_pem));
+    std::vector<uint8_t> pub2(lab_public_pem, lab_public_pem + strlen(lab_public_pem));
+
+    bool valid1 = verify_signature(msg_str, sig1_vec, pub1);
+    bool valid2 = verify_signature(msg_str, sig2_vec, pub2);
+
+    if (!(valid1 && valid2)) {
+        ocall_printf("[Enclave] Signature verification failed.\n");
         return SGX_ERROR_INVALID_SIGNATURE;
     }
-    ocall_printf("[Enclave] Signature verified successfully.\n");
 
-    const char* auth_msg = "Request to execute statistic operation. Approve? (yes/no)";
-    int authorized = 0;
-    ocall_request_authorization(auth_msg, &authorized);
-    if (!authorized) {
-        ocall_printf("[Enclave] Authorization DENIED.\n");
-        return MY_ERROR_ACCESS_DENIED;
-    }
-    ocall_printf("[Enclave] Authorization GRANTED.\n");
+    ocall_printf("[Enclave] Both signatures verified successfully.\n");
+
 
     std::vector<uint8_t> plaintext(ciphertext_len);
     sgx_status_t ret = sgx_rijndael128GCM_decrypt(
-        (const sgx_aes_gcm_128bit_key_t*)&g_sym_key,
+        &g_sym_key,
         ciphertext, ciphertext_len,
         plaintext.data(),
         iv, iv_len,

@@ -15,8 +15,6 @@
 #define RESPONSE_PIPE "/tmp/sgx_response"
 #define AUTH_REQUEST_FILE_A "/tmp/sgx_auth_request_A"
 #define AUTH_REQUEST_FILE_B "/tmp/sgx_auth_request_B"
-#define AUTH_RESPONSE_FILE_A "/tmp/sgx_authorization_A"
-#define AUTH_RESPONSE_FILE_B "/tmp/sgx_authorization_B"
 
 std::string gcs_path = "gs://enclave_bucket/";
 
@@ -95,27 +93,6 @@ std::string get_stat_name(int op) {
     }
 }
 
-void wait_for_authorization(const std::string& id) {
-    std::string file = "/tmp/sgx_auth_request_" + id;
-    while (access(file.c_str(), F_OK) != 0) {
-        usleep(100000);
-    }
-
-    std::ifstream in(file);
-    std::string message;
-    std::getline(in, message);
-    in.close();
-    std::remove(file.c_str());
-
-    std::string answer;
-    std::cout << "\n[Auth Request for you] " << message << "\nApprove? (yes/no): ";
-    std::getline(std::cin, answer);
-
-    std::string auth_resp = "/tmp/sgx_authorization_" + id;
-    std::ofstream out(auth_resp);
-    out << answer << std::endl;
-    out.close();
-}
 
 void read_response() {
     while (access(RESPONSE_PIPE, F_OK) != 0) {
@@ -136,7 +113,7 @@ void read_response() {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: ./client <hospital|lab>\\n";
+        std::cerr << "Usage: ./client <hospital|lab>\n";
         return 1;
     }
 
@@ -190,12 +167,16 @@ int main(int argc, char* argv[]) {
             std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 
+            std::string other_sig;
+            std::cout << "Enter signature from " << other_id(client_id) << ": ";
+            std::getline(std::cin, other_sig);
+
+
             std::ostringstream cmd;
-            cmd << "ssh localhost \"echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
+            cmd << "ssh localhost \"echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
 
             system(cmd.str().c_str());
 
-            wait_for_authorization(other_id(client_id));
             read_response();
         }
     }
