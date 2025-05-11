@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <algorithm>
 #include <string>
 #include <cctype>
 #include <ctime>
@@ -407,14 +408,14 @@ sgx_status_t ecall_process_stats(
         parts.push_back(token);
     }
 
-    if (parts.size() != 5) {
-        ocall_printf("[Enclave] Invalid signed message format. Expected 5 parts.\n");
+    if (parts.size() != 6) {
+        ocall_printf("[Enclave] Invalid signed message format. Expected 6 parts.\n");
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
     uint64_t received_ts;
     try {
-        received_ts = std::stol(parts[4]);
+        received_ts = std::stol(parts[5]);
     } catch (...) {
         ocall_printf("[Enclave] Failed to parse timestamp.\n");
         return SGX_ERROR_INVALID_PARAMETER;
@@ -525,7 +526,7 @@ sgx_status_t ecall_process_stats(
 
                 char mode_buf[64] = {0};
                 sgx_status_t ret = ecall_mode_string(cstrs.data(), cstrs.size(), mode_buf, sizeof(mode_buf));
-                memcpy(out_mode_buf, mode_buf, min(strlen(mode_buf)+1, out_mode_buf_len));
+                memcpy(out_mode_buf, mode_buf, std::min(strlen(mode_buf)+1, static_cast<size_t>(out_mode_buf_len)));
                 return ret;
             } else {
                 return SGX_ERROR_INVALID_PARAMETER;

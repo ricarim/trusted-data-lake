@@ -181,7 +181,7 @@ int main(int argc, char* argv[]) {
             std::getline(std::cin, column);  
 
             time_t now = time(nullptr);
-            std::string message = "stat|" + client_id + "|" + stat + "|" + gcs_path + ""+gcs_file + "|" + std::to_string(now);
+            std::string message = "stat|" + client_id + "|"+ column +"|"+ stat + "|" + gcs_path + ""+gcs_file + "|" + std::to_string(now);
             std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 

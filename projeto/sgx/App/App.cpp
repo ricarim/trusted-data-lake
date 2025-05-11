@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iostream>
 #include <fcntl.h>
+#include <algorithm>
 #include <ctime>
 #include <cstdint>
 #include <sgx_error.h>
@@ -349,13 +350,14 @@ int main() {
                 printf("[App] Upload successful\n");
             else
                 printf("[App] Upload failed\n");
-        } else if (tokens.size() == 7 && tokens[0] == "stat") {
+        } else if (tokens.size() == 8 && tokens[0] == "stat") {
             std::string signer = tokens[1];
-            std::string operation = tokens[2];
-            std::string gcs_path = tokens[3];
-            std::string timestamp = tokens[4];
-            std::string signature1_b64 = tokens[5];
-            std::string signature2_b64 = tokens[6];
+            std::string column = tokens[2];
+            std::string operation = tokens[3];
+            std::string gcs_path = tokens[4];
+            std::string timestamp = tokens[5];
+            std::string signature1_b64 = tokens[6];
+            std::string signature2_b64 = tokens[7];
 
             int signer_type = (signer == "hospital") ? SIGNER_HOSPITAL : SIGNER_LAB;
 
@@ -388,7 +390,7 @@ int main() {
             else if (operation == "stddev") op_code = STAT_STDDEV;
 
             char signed_data[512];
-            snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s|%s", signer.c_str(), operation.c_str(), gcs_path.c_str(), timestamp.c_str());
+            snprintf(signed_data, sizeof(signed_data), "stat|%s|%s|%s|%s|%s", signer.c_str(), column.c_str(), operation.c_str(), gcs_path.c_str(), timestamp.c_str());
 
             std::vector<uint8_t> sig1_bin = base64_decode(signature1_b64);
             std::vector<uint8_t> sig2_bin = base64_decode(signature2_b64);
@@ -410,7 +412,6 @@ int main() {
                            categorical_columns.end(),
                            column) != categorical_columns.end());
 
-            const char* column = "age";
             char mode_buf[64];
             double result = 0.0;
             ret = ecall_process_stats(
@@ -422,7 +423,7 @@ int main() {
                 ciphertext, ciphertext_len,
                 iv, IV_SIZE,
                 mac,
-                column,
+                column.c_str(),
                 op_code,
                 mode_buf, sizeof(mode_buf),
                 &result
