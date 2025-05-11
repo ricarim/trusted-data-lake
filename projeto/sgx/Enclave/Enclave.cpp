@@ -22,6 +22,7 @@
 #include <map>
 #include <numeric>  
 #include <cmath>    
+#include <openssl/err.h>
 
 #define MY_ERROR_ACCESS_DENIED ((sgx_status_t)0xFFFF0001)
 #define SYM_KEY_SIZE 32 
@@ -69,15 +70,37 @@ sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) 
 }
 
 
-bool verify_signature(const std::string& message, const std::vector<uint8_t>& signature, const std::vector<uint8_t>& pubkey_buf) {
-    EVP_PKEY* pkey = nullptr;
-    BIO* mem = BIO_new_mem_buf(pubkey_buf.data(), pubkey_buf.size());
-    pkey = PEM_read_bio_PUBKEY(mem, nullptr, nullptr, nullptr);
+bool verify_signature(const std::string& message, const std::vector<uint8_t>& signature, const char* pem_cstr) {
+    char buffer[512];
+    snprintf(buffer, sizeof(buffer), "[verify_signature] Message size: %zu, Signature size: %zu\n",
+             message.size(), signature.size());
+    ocall_printf(buffer);
+
+    // Use raw PEM string directly with -1 size
+    BIO* mem = BIO_new_mem_buf((void*)pem_cstr, -1);
+    if (!mem) {
+        ocall_printf("[verify_signature] Failed to create BIO from PEM string\n");
+        return false;
+    }
+
+    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(mem, nullptr, nullptr, nullptr);
     BIO_free(mem);
-    if (!pkey) return false;
+
+    if (!pkey) {
+        ocall_printf("[verify_signature] Failed to read public key from BIO\n");
+        unsigned long err;
+        while ((err = ERR_get_error())) {
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            snprintf(buffer, sizeof(buffer), "[OpenSSL Error] %s\n", err_buf);
+            ocall_printf(buffer);
+        }
+        return false;
+    }
 
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
+        ocall_printf("[verify_signature] Failed to create digest context\n");
         EVP_PKEY_free(pkey);
         return false;
     }
@@ -85,6 +108,19 @@ bool verify_signature(const std::string& message, const std::vector<uint8_t>& si
     bool valid = (EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, pkey) == 1 &&
                   EVP_DigestVerifyUpdate(ctx, message.data(), message.size()) == 1 &&
                   EVP_DigestVerifyFinal(ctx, signature.data(), signature.size()) == 1);
+
+    if (!valid) {
+        ocall_printf("[verify_signature] Signature invalid\n");
+        unsigned long err;
+        while ((err = ERR_get_error())) {
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            snprintf(buffer, sizeof(buffer), "[OpenSSL Error] %s\n", err_buf);
+            ocall_printf(buffer);
+        }
+    } else {
+        ocall_printf("[verify_signature] Signature is valid\n");
+    }
 
     EVP_MD_CTX_free(ctx);
     EVP_PKEY_free(pkey);
@@ -301,10 +337,15 @@ sgx_status_t ecall_process_encrypt(
     const uint8_t* signature,
     uint32_t signature_len
 ) {
-    if (!signed_data || !signature || signature_len != 384)
+    if (!signed_data || !signature || signature_len != 384){
+        ocall_printf("[Enclave] Invalid input: null or signature size mismatch\n");
         return SGX_ERROR_INVALID_PARAMETER;
+    }
 
     std::string msg_str(signed_data, signed_data_len);
+    ocall_printf("[Enclave] Received signed data:\n");
+    ocall_printf(msg_str.c_str());
+    ocall_printf("\n");
 
     // Split the signed message
     std::vector<std::string> parts;
@@ -317,6 +358,13 @@ sgx_status_t ecall_process_encrypt(
     if (parts.size() != 5) {
         ocall_printf("[Enclave] Invalid encrypt message format. Expected 5 parts.\n");
         return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    ocall_printf("[Enclave] Parsed message parts:\n");
+    for (size_t i = 0; i < parts.size(); ++i) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "  Part %zu: %s\n", i, parts[i].c_str());
+        ocall_printf(buf);
     }
 
     // Parse and validate timestamp
@@ -343,14 +391,16 @@ sgx_status_t ecall_process_encrypt(
     else if (signer == "lab") pem_cstr = lab_public_pem;
     else {
         ocall_printf("[Enclave] Unknown signer ID.\n");
+        ocall_printf(signer.c_str());
+        ocall_printf("\n");
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    std::vector<uint8_t> pem_vec(pem_cstr, pem_cstr + strlen(pem_cstr));
     std::vector<uint8_t> sig_vec(signature, signature + signature_len);
 
+    ocall_printf("[Enclave] Verifying signature...\n");
     // Verify signature
-    if (!verify_signature(msg_str, sig_vec, pem_vec)) {
+    if (!verify_signature(msg_str, sig_vec, pem_cstr)) {
         ocall_printf("[Enclave] Signature verification failed for encrypt.\n");
         return SGX_ERROR_INVALID_SIGNATURE;
     }
@@ -358,7 +408,6 @@ sgx_status_t ecall_process_encrypt(
     ocall_printf("[Enclave] Signature and timestamp are valid. Encrypt approved.\n");
     return SGX_SUCCESS;
 }
-
 
 
 enum StatOp {
@@ -431,11 +480,8 @@ sgx_status_t ecall_process_stats(
     std::vector<uint8_t> sig1_vec(sig1, sig1 + sig1_len);
     std::vector<uint8_t> sig2_vec(sig2, sig2 + sig2_len);
 
-    std::vector<uint8_t> pub1(hospital_public_pem, hospital_public_pem + strlen(hospital_public_pem));
-    std::vector<uint8_t> pub2(lab_public_pem, lab_public_pem + strlen(lab_public_pem));
-
-    bool valid1 = verify_signature(msg_str, sig1_vec, pub1);
-    bool valid2 = verify_signature(msg_str, sig2_vec, pub2);
+    bool valid1 = verify_signature(msg_str, sig1_vec, hospital_public_pem);
+    bool valid2 = verify_signature(msg_str, sig2_vec, lab_public_pem);
 
     if (!(valid1 && valid2)) {
         ocall_printf("[Enclave] Signature verification failed.\n");

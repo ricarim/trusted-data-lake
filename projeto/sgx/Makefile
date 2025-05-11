@@ -1,7 +1,7 @@
 
 SGX_SDK ?= /opt/intel/sgxsdk
-SGXSSL_ROOT := /home/ricardo/Desktop/uni/mestrado/hardware/intel-sgx-ssl/Linux
-SGX_MODE ?= SIM
+SGXSSL_ROOT := /home/mary/Desktop/msi/ano1/hc/intel-sgx-ssl/Linux
+SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 1
 
