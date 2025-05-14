@@ -32,32 +32,18 @@
 static sgx_aes_gcm_128bit_key_t g_sym_key;
 static bool g_sym_key_ready = false;
 
-const char hospital_public_pem[] =
-"-----BEGIN PUBLIC KEY-----\n"
-"MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAzolQ3N45sFIoVZ9Ol4Lw\n"
-"mMCtnXyLygscDeKz/cKjdoEN2YexLBTcVlLLZEXv1m3sv16D9mxZrCZtsPeYVLwc\n"
-"/i4SYQSLKFpITEqFNHz4i39hqV51/9D1TQNnlSDtLG14jtW+MXeDN4/ZfdPA+tHO\n"
-"B/M8H+ODPuT1bDTYtMb0Hzvu18BRHm/H+/U2mcO3c3ldrKZllSJTkeUn301cT+Ql\n"
-"atAl+1w23HURhJLe84rxk0pXP+agIZVTwE1iTQZjXtt+jtgBjaq32htA4JJ/tiC7\n"
-"CEbIV4jp9PeftMWaXf8OUal5mzilKfIgbfM5Gh9xxJix1Noc6zw3ei2oMuaIVIst\n"
-"nGPB/wzwDFG6Ca+6Bo2Gf45w07VzSZAzD8EpLQO++qFW/cEd0/lUIuHHcf9v4aW1\n"
-"TIifjgddAmTKC+KaBKuKuhUOsBL4MX9hSxweCmeQF4+dcUo0JWQVsgq0jA0dka0r\n"
-"ptFafalHZsBdsnRNzfXiaJxqFQbkCmiK5+Yx11EpnYeXAgMBAAE=\n"
-"-----END PUBLIC KEY-----\n";
+#define SIGNER_HOSPITAL 0
+#define SIGNER_LAB 1
 
-const char lab_public_pem[] =
-"-----BEGIN PUBLIC KEY-----\n"
-"MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAkUbGrtMCHcvHZ6CFioS0\n"
-"plpDxLpgiDntyYPCwO2urhJhwXuYE9VEBaYrmZemO8Q/NvMH7OoOIQMyv0dsu/hk\n"
-"ywB/ULxk8HoUaOz3N/oFucDHLndTXDQf5Q6okqWuX7mXj57+Lxr4iqUT0Csp8V82\n"
-"1MRYdvX67X9DrUk6Fl3ZOd1fO5Ztnhgx7/f6yk/DI5ytj4FuFCFTZcC9aCrWawQ+\n"
-"mTwppb+UTt7WlVNwlXbXuhS66mDxu9nvI21a326w5Fih+h7WmdC0UH70/FLx7x3c\n"
-"5HZ1vMwPcDEKBKqDVzEpAI0jOWglltRo4eEXUyt3AZHWJdhRajW70bQVRB4mxGHE\n"
-"pFJiqvUxItuTAFXl+g4XtoHf9ifn0LpSEZKxEXJcjPwEe793uTsvKpUNnEaiDOMO\n"
-"OQLnlJuN3mdZhNW3/XwiUeEfkwEP3fT5jW8aXRj6mQDmwIgpW3v4ZtSbYM/5jys3\n"
-"dg3OycBKA3BQ9rdmuloJOKiKdiE6InvWihqGuvnRNFM5AgMBAAE=\n"
-"-----END PUBLIC KEY-----\n";
+static const sgx_ec256_public_t g_pubkey_hospital = {
+    .gx = { 0x7a, 0x43, 0xf1, 0xb1, 0x51, 0x96, 0x2e, 0x8d, 0x66, 0x3b, 0xd3, 0x43, 0x66, 0x14, 0x80, 0x50, 0x5a, 0xbe, 0xff, 0x29, 0x86, 0xb6, 0xed, 0x1e, 0x9a, 0x64, 0x9b, 0xe9, 0x09, 0xaf, 0x91, 0x14 },
+    .gy = { 0xc4, 0x30, 0xba, 0xb9, 0x5e, 0x3f, 0xa2, 0xea, 0x67, 0x6a, 0x3c, 0x2c, 0x77, 0x56, 0x97, 0xd7, 0xae, 0x51, 0x3f, 0x55, 0xb4, 0x95, 0x48, 0x53, 0xd7, 0xc7, 0xb1, 0x92, 0xab, 0x72, 0xe7, 0xe5 }
+};
 
+static const sgx_ec256_public_t g_pubkey_lab = {
+    .gx = { 0x5f, 0x51, 0x33, 0x8e, 0x8c, 0x26, 0x3a, 0x2c, 0xa2, 0xef, 0x31, 0x8b, 0x86, 0x8a, 0xad, 0x0e, 0xd3, 0x3c, 0x52, 0x7b, 0xfc, 0xd5, 0x9a, 0x3b, 0x3a, 0xaa, 0xd4, 0x2a, 0x89, 0xb6, 0x66, 0x8f },
+    .gy = { 0x1b, 0xad, 0x6f, 0x09, 0x27, 0x47, 0x58, 0xb8, 0x6c, 0x18, 0x87, 0x4f, 0xac, 0x91, 0x0b, 0x8d, 0xb8, 0x7f, 0x69, 0x1c, 0xd2, 0x29, 0x0a, 0x09, 0x0a, 0x37, 0xc1, 0x89, 0xa1, 0x31, 0xcb, 0x55 }
+};
 
 sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) {
     if (!target_info_buf || !report_buf) return SGX_ERROR_INVALID_PARAMETER;
@@ -70,62 +56,30 @@ sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) 
 }
 
 
-bool verify_signature(const std::string& message, const std::vector<uint8_t>& signature, const char* pem_cstr) {
-    char buffer[512];
-    snprintf(buffer, sizeof(buffer), "[verify_signature] Message size: %zu, Signature size: %zu\n",
-             message.size(), signature.size());
-    ocall_printf(buffer);
 
-    // Use raw PEM string directly with -1 size
-    BIO* mem = BIO_new_mem_buf((void*)pem_cstr, -1);
-    if (!mem) {
-        ocall_printf("[verify_signature] Failed to create BIO from PEM string\n");
-        return false;
+int ecc_verify(uint8_t* data, size_t len, sgx_ec256_signature_t* sig,int signer_type) {
+    if (!data || !sig || (signer_type != SIGNER_HOSPITAL && signer_type != SIGNER_LAB)) {
+        return 0; 
     }
+    const sgx_ec256_public_t* pubkey = nullptr;
 
-    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(mem, nullptr, nullptr, nullptr);
-    BIO_free(mem);
+    
+    if (signer_type == SIGNER_HOSPITAL)
+        pubkey = &g_pubkey_hospital;
+    else if (signer_type == SIGNER_LAB)
+        pubkey = &g_pubkey_lab;
 
-    if (!pkey) {
-        ocall_printf("[verify_signature] Failed to read public key from BIO\n");
-        unsigned long err;
-        while ((err = ERR_get_error())) {
-            char err_buf[256];
-            ERR_error_string_n(err, err_buf, sizeof(err_buf));
-            snprintf(buffer, sizeof(buffer), "[OpenSSL Error] %s\n", err_buf);
-            ocall_printf(buffer);
-        }
-        return false;
-    }
+    sgx_ecc_state_handle_t ctx;
+    sgx_status_t status = sgx_ecc256_open_context(&ctx);
+    if (status != SGX_SUCCESS) return 0;
 
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) {
-        ocall_printf("[verify_signature] Failed to create digest context\n");
-        EVP_PKEY_free(pkey);
-        return false;
-    }
+    uint8_t result = SGX_EC_INVALID_SIGNATURE;
+    status = sgx_ecdsa_verify(data, (uint32_t)len, pubkey, sig, &result, ctx);
+    sgx_ecc256_close_context(ctx);
 
-    bool valid = (EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, pkey) == 1 &&
-                  EVP_DigestVerifyUpdate(ctx, message.data(), message.size()) == 1 &&
-                  EVP_DigestVerifyFinal(ctx, signature.data(), signature.size()) == 1);
-
-    if (!valid) {
-        ocall_printf("[verify_signature] Signature invalid\n");
-        unsigned long err;
-        while ((err = ERR_get_error())) {
-            char err_buf[256];
-            ERR_error_string_n(err, err_buf, sizeof(err_buf));
-            snprintf(buffer, sizeof(buffer), "[OpenSSL Error] %s\n", err_buf);
-            ocall_printf(buffer);
-        }
-    } else {
-        ocall_printf("[verify_signature] Signature is valid\n");
-    }
-
-    EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(pkey);
-    return valid;
+    return (status == SGX_SUCCESS && result == SGX_EC_VALID);
 }
+
 
 sgx_status_t ecall_generate_iv(uint8_t* iv, size_t iv_len) {
     if (!iv || iv_len != IV_SIZE)
@@ -337,7 +291,7 @@ sgx_status_t ecall_process_encrypt(
     const uint8_t* signature,
     uint32_t signature_len
 ) {
-    if (!signed_data || !signature || signature_len != 384){
+    if (!signed_data || !signature || signature_len != sizeof(sgx_ec256_signature_t)){
         ocall_printf("[Enclave] Invalid input: null or signature size mismatch\n");
         return SGX_ERROR_INVALID_PARAMETER;
     }
@@ -360,11 +314,13 @@ sgx_status_t ecall_process_encrypt(
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    ocall_printf("[Enclave] Parsed message parts:\n");
-    for (size_t i = 0; i < parts.size(); ++i) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), "  Part %zu: %s\n", i, parts[i].c_str());
-        ocall_printf(buf);
+    std::string signer = parts[1];
+    int signer_type = -1;
+    if (signer == "hospital") signer_type = SIGNER_HOSPITAL;
+    else if (signer == "lab") signer_type = SIGNER_LAB;
+    else {
+        ocall_printf("[Enclave] Unknown signer.\n");
+        return SGX_ERROR_INVALID_PARAMETER;
     }
 
     // Parse and validate timestamp
@@ -384,26 +340,15 @@ sgx_status_t ecall_process_encrypt(
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    // Determine signer and get public key
-    std::string signer = parts[1];
-    const char* pem_cstr = nullptr;
-    if (signer == "hospital") pem_cstr = hospital_public_pem;
-    else if (signer == "lab") pem_cstr = lab_public_pem;
-    else {
-        ocall_printf("[Enclave] Unknown signer ID.\n");
-        ocall_printf(signer.c_str());
-        ocall_printf("\n");
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
 
-    std::vector<uint8_t> sig_vec(signature, signature + signature_len);
+    const sgx_ec256_signature_t* sig = reinterpret_cast<const sgx_ec256_signature_t*>(signature);
 
-    ocall_printf("[Enclave] Verifying signature...\n");
-    // Verify signature
-    if (!verify_signature(msg_str, sig_vec, pem_cstr)) {
-        ocall_printf("[Enclave] Signature verification failed for encrypt.\n");
+    // Call ecc_verify
+    if (!ecc_verify((uint8_t*)signed_data, signed_data_len, (sgx_ec256_signature_t*)sig, signer_type)) {
+        ocall_printf("[Enclave] Signature verification failed.\n");
         return SGX_ERROR_INVALID_SIGNATURE;
     }
+
 
     ocall_printf("[Enclave] Signature and timestamp are valid. Encrypt approved.\n");
     return SGX_SUCCESS;
@@ -477,15 +422,15 @@ sgx_status_t ecall_process_stats(
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    std::vector<uint8_t> sig1_vec(sig1, sig1 + sig1_len);
-    std::vector<uint8_t> sig2_vec(sig2, sig2 + sig2_len);
+    const sgx_ec256_signature_t* sig_hospital = reinterpret_cast<const sgx_ec256_signature_t*>(sig1);
+    const sgx_ec256_signature_t* sig_lab = reinterpret_cast<const sgx_ec256_signature_t*>(sig2);
 
-    bool valid1 = verify_signature(msg_str, sig1_vec, hospital_public_pem);
-    bool valid2 = verify_signature(msg_str, sig2_vec, lab_public_pem);
+    bool valid_hosp = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig_hospital), SIGNER_HOSPITAL);
+    bool valid_lab  = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig_lab), SIGNER_LAB);
 
-    if (!(valid1 && valid2)) {
-        ocall_printf("[Enclave] Signature verification failed.\n");
-        return SGX_ERROR_INVALID_SIGNATURE;
+    if (!(valid_hosp && valid_lab)) {
+        ocall_printf("[Enclave] Signature verification failed for one or both parties.\n");
+        return MY_ERROR_ACCESS_DENIED;
     }
 
     ocall_printf("[Enclave] Both signatures verified successfully.\n");

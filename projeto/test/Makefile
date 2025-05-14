@@ -1,4 +1,3 @@
-
 SGX_SDK ?= /opt/intel/sgxsdk
 SGXSSL_ROOT := /home/ricardo/Desktop/uni/mestrado/hardware/intel-sgx-ssl/Linux
 SGX_MODE ?= SIM
@@ -219,3 +218,4 @@ $(Signed_Enclave_Name): $(Enclave_Name)
 
 clean:
 	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
+

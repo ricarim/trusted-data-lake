@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "sgx_edger8r.h" /* for sgx_ocall etc. */
 
+#include "sgx_tcrypto.h"
 
 #include <stdlib.h> /* for size_t */
 
@@ -18,6 +19,7 @@ extern "C" {
 sgx_status_t ecall_generate_and_seal_key(uint8_t* sealed_data, uint32_t sealed_size);
 sgx_status_t ecall_unseal_key(uint8_t* sealed_data, uint32_t sealed_size);
 sgx_status_t ecall_process_stats(const char* signed_data, uint32_t signed_data_len, const uint8_t* sig1, uint32_t sig1_len, const uint8_t* sig2, uint32_t sig2_len, const uint8_t* ciphertext, uint32_t ciphertext_len, const uint8_t* iv, uint32_t iv_len, const uint8_t* mac, const char* column_name, int op_code, char* out_mode_buf, uint32_t out_mode_buf_len, double* result);
+int ecc_verify(uint8_t* data, size_t len, sgx_ec256_signature_t* sig, int signer_type);
 sgx_status_t ecall_encrypt_data(uint8_t* plaintext, size_t plaintext_len, uint8_t* iv, size_t iv_len, uint8_t* ciphertext, uint8_t* mac);
 sgx_status_t ecall_process_encrypt(const char* signed_data, uint32_t signed_data_len, const uint8_t* signature, uint32_t signature_len);
 sgx_status_t ecall_generate_iv(uint8_t* iv, size_t iv_len);

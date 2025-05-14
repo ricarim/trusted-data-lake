@@ -20,6 +20,10 @@
 #include <sgx_report.h>
 #include <sgx_ql_quote.h>
 #include <sgx_ql_lib_common.h>
+#include <openssl/ecdsa.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/bn.h>
 #include "Enclave_u.h"
 
 #define ENCLAVE_FILE "enclave.signed.so"
@@ -54,18 +58,6 @@ void ocall_printf(const char* str) {
     printf("%s", str);
 }
 
-std::vector<uint8_t> read_pem_file(const std::string& path) {
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) return {};
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    rewind(f);
-    std::vector<uint8_t> buffer(size);
-    fread(buffer.data(), 1, size, f);
-    fclose(f);
-    return buffer;
-}
-
 
 std::vector<uint8_t> base64_decode(const std::string& encoded) {
     BIO* b64 = BIO_new(BIO_f_base64());
@@ -82,6 +74,8 @@ std::vector<uint8_t> base64_decode(const std::string& encoded) {
     BIO_free_all(bio_chain);
     return decoded;
 }
+
+
 
 // Save sealed key to file
 bool save_sealed_key(const char* path, uint8_t* data, uint32_t size) {
@@ -214,7 +208,6 @@ void ocall_get_time(uint64_t* t) {
     if (t) *t = static_cast<uint64_t>(time(nullptr));
 }
 
-
 int main() {
     sgx_status_t ret,retval;
     sgx_status_t sgx_ret;
@@ -293,23 +286,36 @@ int main() {
             std::string timestamp = tokens[4];
             std::string signature_b64 = tokens[5];
 
-            std::string signed_data = "encrypt|" + signer + "|" + filename + "|" + gcs_path + "|" + timestamp;
-
-            std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
-            if (sig_bin.size() != 384) {
-                printf("[App] Invalid signature size.\n");
+            int signer_type = -1;
+            if (signer == "hospital") signer_type = SIGNER_HOSPITAL;
+            else if (signer == "lab") signer_type = SIGNER_LAB;
+            else {
+                printf("[App] Invalid signer: %s\n", signer.c_str());
                 continue;
             }
 
-            sgx_status_t verify_ret;
+            std::string signed_data = "encrypt|" + signer + "|" + filename + "|" + gcs_path + "|" + timestamp;
+
+            std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
+            if (sig_bin.size() != sizeof(sgx_ec256_signature_t)) {
+                printf("[App] Invalid signature size\n");
+                continue;
+            }
+
+            sgx_ec256_signature_t sig;
+
+            memcpy(&sig, sig_bin.data(), sizeof(sgx_ec256_signature_t));
+
+            sgx_status_t enc_ret;
             ret = ecall_process_encrypt(
-                eid, &verify_ret,
-                signed_data.c_str(), signed_data.size(),
-                sig_bin.data(), sig_bin.size()
+                eid, &enc_ret,
+                reinterpret_cast<const char*>(signed_data.data()), signed_data.size(),
+                reinterpret_cast<const uint8_t*>(&sig), sizeof(sig)
             );
 
-            if (ret != SGX_SUCCESS || verify_ret != SGX_SUCCESS) {
-                printf("[App] Signature or timestamp invalid. Aborting encryption.\n");
+
+            if (ret != SGX_SUCCESS || enc_ret != SGX_SUCCESS) {
+                printf("[App] Signature verification or timestamp check failed. Aborting encryption.\n");
                 continue;
             }
 
@@ -359,7 +365,14 @@ int main() {
             std::string signature1_b64 = tokens[6];
             std::string signature2_b64 = tokens[7];
 
-            int signer_type = (signer == "hospital") ? SIGNER_HOSPITAL : SIGNER_LAB;
+            int signer_type = -1;
+            if (signer == "hospital") signer_type = SIGNER_HOSPITAL;
+            else if (signer == "lab") signer_type = SIGNER_LAB;
+            else {
+                printf("[App] Invalid signer: %s\n", signer.c_str());
+                continue;
+            }
+
 
             if (!download_from_gcs(gcs_path.c_str(), "encrypted.bin")) {
                 printf("[App] Failed to download encrypted file\n");
@@ -395,11 +408,14 @@ int main() {
             std::vector<uint8_t> sig1_bin = base64_decode(signature1_b64);
             std::vector<uint8_t> sig2_bin = base64_decode(signature2_b64);
 
-            if (sig1_bin.size() != 384 || sig2_bin.size() != 384) {
-                printf("[App] One or both signatures are invalid size (expected 384 bytes)\n");
+            if (sig1_bin.size() != sizeof(sgx_ec256_signature_t) || sig2_bin.size() != sizeof(sgx_ec256_signature_t)) {
+                printf("[App] One or both signatures have invalid size (expected 64 bytes)\n");
                 continue;
             }
 
+            sgx_ec256_signature_t sig1, sig2;
+            memcpy(&sig2, sig2_bin.data(), sizeof(sgx_ec256_signature_t));
+            memcpy(&sig1, sig1_bin.data(), sizeof(sgx_ec256_signature_t));
 
             static const std::vector<std::string> categorical_columns = {
                 "gender",

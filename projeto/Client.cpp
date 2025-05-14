@@ -23,13 +23,42 @@ std::string other_id(const std::string& id) {
     return id == "lab" ? "hospital" : "lab";
 }
 
-EVP_PKEY* load_private_key(const std::string& keyfile) {
-    FILE* fp = fopen(keyfile.c_str(), "r");
-    if (!fp) return nullptr;
-    EVP_PKEY* pkey = PEM_read_PrivateKey(fp, nullptr, nullptr, nullptr);
-    fclose(fp);
+EVP_PKEY* load_private_key(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return nullptr;
+
+    std::vector<unsigned char> priv_bytes(32);
+    file.read((char*)priv_bytes.data(), 32);
+    if (file.gcount() != 32) return nullptr;
+
+    BIGNUM* priv_bn = BN_bin2bn(priv_bytes.data(), 32, nullptr);
+    if (!priv_bn) return nullptr;
+
+    EC_KEY* ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);  // NIST P-256
+    if (!EC_KEY_set_private_key(ec_key, priv_bn)) {
+        BN_free(priv_bn);
+        EC_KEY_free(ec_key);
+        return nullptr;
+    }
+
+    const EC_GROUP* group = EC_KEY_get0_group(ec_key);
+    EC_POINT* pub_key = EC_POINT_new(group);
+    if (!EC_POINT_mul(group, pub_key, priv_bn, nullptr, nullptr, nullptr)) {
+        BN_free(priv_bn);
+        EC_KEY_free(ec_key);
+        EC_POINT_free(pub_key);
+        return nullptr;
+    }
+
+    EC_KEY_set_public_key(ec_key, pub_key);
+    EVP_PKEY* pkey = EVP_PKEY_new();
+    EVP_PKEY_assign_EC_KEY(pkey, ec_key);
+
+    BN_free(priv_bn);
+    EC_POINT_free(pub_key);
     return pkey;
 }
+
 
 std::string sign_message(const std::string& message, EVP_PKEY* pkey) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -45,16 +74,27 @@ std::string sign_message(const std::string& message, EVP_PKEY* pkey) {
         return "";
     }
 
-    size_t sig_len = 0;
-    EVP_DigestSignFinal(ctx, nullptr, &sig_len);
-    std::vector<unsigned char> sig(sig_len);
-
-    if (EVP_DigestSignFinal(ctx, sig.data(), &sig_len) <= 0) {
+    size_t siglen = 0;
+    EVP_DigestSignFinal(ctx, nullptr, &siglen);
+    std::vector<unsigned char> der(siglen);
+    if (EVP_DigestSignFinal(ctx, der.data(), &siglen) <= 0) {
         EVP_MD_CTX_free(ctx);
         return "";
     }
-
+    der.resize(siglen);
     EVP_MD_CTX_free(ctx);
+
+    const unsigned char* p = der.data();
+    ECDSA_SIG* sig = d2i_ECDSA_SIG(nullptr, &p, der.size());
+    if (!sig) return "";
+
+    const BIGNUM *r, *s;
+    ECDSA_SIG_get0(sig, &r, &s);
+
+    std::vector<uint8_t> rs(64);
+    BN_bn2lebinpad(r, rs.data(), 32);      // Little endian r
+    BN_bn2lebinpad(s, rs.data() + 32, 32); // Little endian s
+    ECDSA_SIG_free(sig);
 
     // Base64 encode
     BIO* b64 = BIO_new(BIO_f_base64());
@@ -62,17 +102,17 @@ std::string sign_message(const std::string& message, EVP_PKEY* pkey) {
     BIO* mem = BIO_new(BIO_s_mem());
     BIO* bio_chain = BIO_push(b64, mem);
 
-
-    BIO_write(bio_chain, sig.data(), sig_len);
+    BIO_write(bio_chain, rs.data(), rs.size());
     BIO_flush(bio_chain);
 
     BUF_MEM* bptr;
     BIO_get_mem_ptr(mem, &bptr);
-    std::string b64sig(bptr->data, bptr->length);  // remove \0
+    std::string b64sig(bptr->data, bptr->length);
 
     BIO_free_all(bio_chain);
     return b64sig;
 }
+
 
 void show_menu() {
     std::cout << "\n==== SGX Client Menu ====\n";
@@ -127,10 +167,11 @@ int main(int argc, char* argv[]) {
     }
 
 
-    std::string key_path = client_id + "_private.pem";
+    std::string key_path = "ecc_" + client_id + "_privkey.bin";
     EVP_PKEY* pkey = load_private_key(key_path);
     if (!pkey) {
         std::cerr << "Failed to load private key: " << key_path << "\n";
+        ERR_print_errors_fp(stderr);
         return 1;
     }
 

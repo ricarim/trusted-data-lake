@@ -60,6 +60,14 @@ typedef struct ms_ecall_process_stats_t {
 	double* ms_result;
 } ms_ecall_process_stats_t;
 
+typedef struct ms_ecc_verify_t {
+	int ms_retval;
+	uint8_t* ms_data;
+	size_t ms_len;
+	sgx_ec256_signature_t* ms_sig;
+	int ms_signer_type;
+} ms_ecc_verify_t;
+
 typedef struct ms_ecall_encrypt_data_t {
 	sgx_status_t ms_retval;
 	uint8_t* ms_plaintext;
@@ -527,6 +535,79 @@ err:
 	if (_in_column_name) free(_in_column_name);
 	if (_in_out_mode_buf) free(_in_out_mode_buf);
 	if (_in_result) free(_in_result);
+	return status;
+}
+
+static sgx_status_t SGX_CDECL sgx_ecc_verify(void* pms)
+{
+	CHECK_REF_POINTER(pms, sizeof(ms_ecc_verify_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+	ms_ecc_verify_t* ms = SGX_CAST(ms_ecc_verify_t*, pms);
+	ms_ecc_verify_t __in_ms;
+	if (memcpy_s(&__in_ms, sizeof(ms_ecc_verify_t), ms, sizeof(ms_ecc_verify_t))) {
+		return SGX_ERROR_UNEXPECTED;
+	}
+	sgx_status_t status = SGX_SUCCESS;
+	uint8_t* _tmp_data = __in_ms.ms_data;
+	size_t _tmp_len = __in_ms.ms_len;
+	size_t _len_data = _tmp_len;
+	uint8_t* _in_data = NULL;
+	sgx_ec256_signature_t* _tmp_sig = __in_ms.ms_sig;
+	size_t _len_sig = sizeof(sgx_ec256_signature_t);
+	sgx_ec256_signature_t* _in_sig = NULL;
+	int _in_retval;
+
+	CHECK_UNIQUE_POINTER(_tmp_data, _len_data);
+	CHECK_UNIQUE_POINTER(_tmp_sig, _len_sig);
+
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_data != NULL && _len_data != 0) {
+		if ( _len_data % sizeof(*_tmp_data) != 0)
+		{
+			status = SGX_ERROR_INVALID_PARAMETER;
+			goto err;
+		}
+		_in_data = (uint8_t*)malloc(_len_data);
+		if (_in_data == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_data, _len_data, _tmp_data, _len_data)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	if (_tmp_sig != NULL && _len_sig != 0) {
+		_in_sig = (sgx_ec256_signature_t*)malloc(_len_sig);
+		if (_in_sig == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_sig, _len_sig, _tmp_sig, _len_sig)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	_in_retval = ecc_verify(_in_data, _tmp_len, _in_sig, __in_ms.ms_signer_type);
+	if (memcpy_verw_s(&ms->ms_retval, sizeof(ms->ms_retval), &_in_retval, sizeof(_in_retval))) {
+		status = SGX_ERROR_UNEXPECTED;
+		goto err;
+	}
+
+err:
+	if (_in_data) free(_in_data);
+	if (_in_sig) free(_in_sig);
 	return status;
 }
 
@@ -1504,13 +1585,14 @@ err:
 
 SGX_EXTERNC const struct {
 	size_t nr_ecall;
-	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[15];
+	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[16];
 } g_ecall_table = {
-	15,
+	16,
 	{
 		{(void*)(uintptr_t)sgx_ecall_generate_and_seal_key, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_unseal_key, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_process_stats, 0, 0},
+		{(void*)(uintptr_t)sgx_ecc_verify, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_encrypt_data, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_process_encrypt, 0, 0},
 		{(void*)(uintptr_t)sgx_ecall_generate_iv, 0, 0},
@@ -1528,16 +1610,16 @@ SGX_EXTERNC const struct {
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[6][15];
+	uint8_t entry_table[6][16];
 } g_dyn_entry_table = {
 	6,
 	{
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 	}
 };
 
