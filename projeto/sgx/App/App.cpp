@@ -20,6 +20,7 @@
 #include <sgx_report.h>
 #include <sgx_ql_quote.h>
 #include <sgx_ql_lib_common.h>
+#include <sgx_dcap_ql_wrapper.h>
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -221,6 +222,46 @@ int main() {
         printf("Error creating enclave: 0x%x\n", ret);
         return -1;
     }
+
+        sgx_target_info_t qe_target_info = {};
+    sgx_report_t report = {};
+    uint32_t quote_size = 0;
+    uint8_t* quote = nullptr;
+
+    // get target_info
+    ret = sgx_qe_get_target_info(&qe_target_info);
+    if (ret != SGX_SUCCESS) {
+        printf("sgx_qe_get_target_info failed: 0x%x\n", ret);
+        return -1;
+    }
+
+    // Create report inside enclave
+    ret = ecall_create_report(eid, &retval,
+        (uint8_t*)&qe_target_info,
+        (uint8_t*)&report);
+    if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+        printf("ecall_create_report failed: 0x%x\n", ret);
+        return -1;
+    }
+
+    // Get quote size
+    ret = sgx_qe_get_quote_size(&quote_size);
+    if (ret != SGX_SUCCESS) {
+        printf("sgx_qe_get_quote_size failed: 0x%x\n", ret);
+        return -1;
+    }
+
+    quote = (uint8_t*)malloc(quote_size);
+
+    // Get quote
+    ret = sgx_qe_get_quote(&report, quote_size, quote);
+    if (ret != SGX_SUCCESS) {
+        printf("sgx_qe_get_quote failed: 0x%x\n", ret);
+        free(quote);
+        return -1;
+    }
+
+    printf("[App] Remote attestation quote successfully generated.\n");
 
 
     uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
