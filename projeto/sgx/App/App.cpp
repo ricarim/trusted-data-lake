@@ -15,8 +15,8 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <vector>
-#include "sgx_dcap_quoteverify.h"
 #include <time.h>
+#include "sgx_dcap_quoteverify.h"
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <sgx_report.h>
@@ -212,7 +212,7 @@ void ocall_get_time(uint64_t* t) {
 }
 
 int main() {
-    sgx_status_t ret,retval;
+    sgx_status_t ret;
     sgx_status_t sgx_ret;
 
     remove(PIPE_PATH);
@@ -225,15 +225,17 @@ int main() {
         return -1;
     }
 
-        sgx_target_info_t qe_target_info = {};
+    sgx_target_info_t qe_target_info = {};
     sgx_report_t report = {};
     uint32_t quote_size = 0;
     uint8_t* quote = nullptr;
+    sgx_status_t retval = SGX_SUCCESS;
+    quote3_error_t qe_ret = SGX_QL_SUCCESS;
 
     // get target_info
-    ret = sgx_qe_get_target_info(&qe_target_info);
-    if (ret != SGX_SUCCESS) {
-        printf("sgx_qe_get_target_info failed: 0x%x\n", ret);
+    qe_ret = sgx_qe_get_target_info(&qe_target_info);
+    if (qe_ret != SGX_QL_SUCCESS) {
+        printf("sgx_qe_get_target_info failed: 0x%x\n", qe_ret);
         return -1;
     }
 
@@ -247,27 +249,27 @@ int main() {
     }
 
     // Get quote size
-    ret = sgx_qe_get_quote_size(&quote_size);
-    if (ret != SGX_SUCCESS) {
-        printf("sgx_qe_get_quote_size failed: 0x%x\n", ret);
+    qe_ret = sgx_qe_get_quote_size(&quote_size);
+    if (qe_ret != SGX_QL_SUCCESS) {
+        printf("sgx_qe_get_quote_size failed: 0x%x\n", qe_ret);
         return -1;
     }
 
     quote = (uint8_t*)malloc(quote_size);
 
     // Get quote
-    ret = sgx_qe_get_quote(&report, quote_size, quote);
-    if (ret != SGX_SUCCESS) {
-        printf("sgx_qe_get_quote failed: 0x%x\n", ret);
+    qe_ret = sgx_qe_get_quote(&report, quote_size, quote);
+    if (qe_ret != SGX_QL_SUCCESS) {
+        printf("sgx_qe_get_quote failed: 0x%x\n", qe_ret);
         free(quote);
         return -1;
     }
 
     printf("[App] Remote attestation quote successfully generated.\n");
 
-    quote3_error_t qv_ret = SGX_QL_SUCCESS;
-    sgx_qv_result_t qv_result = SGX_QL_QV_RESULT_UNSPECIFIED;
     uint32_t collateral_expiration_status = 1;
+    quote3_error_t qv_ret = SGX_QL_SUCCESS;
+    tee_qv_result_t qv_result = TEE_QV_RESULT_UNSPECIFIED;
     time_t current_time = time(NULL);
 
     qv_ret = sgx_qv_verify_quote(
