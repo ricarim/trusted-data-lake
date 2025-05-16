@@ -16,6 +16,8 @@
 *.privkey
 *private*
 ecc_*_privkey.*
+.config_SIM_DEBUG_x64
+.config_HW_DEBUG_x64
 
 sealed_key.bin
 enclave.signed.so
