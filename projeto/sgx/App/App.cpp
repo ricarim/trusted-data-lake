@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <vector>
+#include "sgx_dcap_quoteverify.h"
+#include <time.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <sgx_report.h>
@@ -262,6 +264,40 @@ int main() {
     }
 
     printf("[App] Remote attestation quote successfully generated.\n");
+
+    quote3_error_t qv_ret = SGX_QL_SUCCESS;
+    sgx_qv_result_t qv_result = SGX_QL_QV_RESULT_UNSPECIFIED;
+    uint32_t collateral_expiration_status = 1;
+    time_t current_time = time(NULL);
+
+    qv_ret = sgx_qv_verify_quote(
+        quote,                   
+        quote_size,              
+        NULL, 
+        current_time,   
+        &collateral_expiration_status,
+        &qv_result,
+        NULL, 0, NULL       
+    );
+
+    if (qv_ret == SGX_QL_SUCCESS) {
+        switch (qv_result) {
+            case SGX_QL_QV_RESULT_OK:
+                printf("[App] Quote verification succeeded.\n");
+                break;
+            case SGX_QL_QV_RESULT_CONFIG_NEEDED:
+            case SGX_QL_QV_RESULT_OUT_OF_DATE:
+            case SGX_QL_QV_RESULT_SW_HARDENING_NEEDED:
+            case SGX_QL_QV_RESULT_CONFIG_AND_SW_HARDENING_NEEDED:
+                printf("[App] Quote is acceptable with warnings: 0x%x\n", qv_result);
+                break;
+            default:
+                printf("[App] Quote is invalid: 0x%x\n", qv_result);
+                break;
+        }
+    } else {
+        printf("[App] Quote verification failed. Error code: 0x%x\n", qv_ret);
+    }
 
 
     uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
