@@ -23,7 +23,9 @@ enclave.so
 Enclave_u.*
 Enclave_t.*
 App.o
-App
+app
+client
+sign_message
 
 *.log
 *.dump
