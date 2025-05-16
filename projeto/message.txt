@@ -1,1 +1,0 @@
-stat|hospital|sum|gs://enclave_bucket/encrypted.bin|1746700401
