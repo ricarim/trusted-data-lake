@@ -248,7 +248,7 @@ int main(int argc, char* argv[]) {
             sanitize(sig);
 
             std::ostringstream cmd;
-            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user <<"@"<< ssh_host << "\echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
+            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user <<"@"<< ssh_host <<" \"echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
             system(cmd.str().c_str());
         } else if (choice == 2) {
             stats_menu();
@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
             std::string full_msg = message + "|" + sig + "|" + other_sig;
 
             std::ostringstream cmd;
-            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user<< "@"<< ssh_host<<"\echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
+            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user<< "@"<< ssh_host<<" \"echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
 
             system(cmd.str().c_str());
 
@@ -325,7 +325,7 @@ int main(int argc, char* argv[]) {
 	    sanitize(key_b64);
 
 	    std::ostringstream cmd;
-	    cmd << "ssh -i " << ssh_key_path << " "<< ssh_user << "@" << ssh_host<< "\echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
+	    cmd << "ssh -i " << ssh_key_path << " "<< ssh_user << "@" << ssh_host<<" \"echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
 	    system(cmd.str().c_str());
 
 	    std::cout << "[Client] Sent symmetric key to enclave.\n";
