@@ -118,6 +118,7 @@ void show_menu() {
     std::cout << "\n==== SGX Client Menu ====\n";
     std::cout << "1. Encrypt and upload CSV\n";
     std::cout << "2. Compute statistic\n";
+    std::cout << "3. Send my key to enclave\n";
     std::cout << "0. Exit\n";
     std::cout << "Choose an option: ";
 }
@@ -251,7 +252,44 @@ int main(int argc, char* argv[]) {
             system(cmd.str().c_str());
 
             read_response();
-        }
+        }else if(choice == 3){
+	    std::ifstream key_file(key_path, std::ios::binary);
+	    if (!key_file) {
+		std::cerr << "Failed to open key file: " << key_path << "\n";
+		continue;
+	    }
+
+	    std::vector<unsigned char> key_bytes(32);
+	    key_file.read((char*)key_bytes.data(), 32);
+	    if (key_file.gcount() != 32) {
+		std::cerr << "Invalid key length in file\n";
+		continue;
+	    }
+
+	    BIO* b64 = BIO_new(BIO_f_base64());
+	    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+	    BIO* mem = BIO_new(BIO_s_mem());
+	    BIO* chain = BIO_push(b64, mem);
+	    BIO_write(chain, key_bytes.data(), key_bytes.size());
+	    BIO_flush(chain);
+	    BUF_MEM* bptr;
+	    BIO_get_mem_ptr(mem, &bptr);
+	    std::string key_b64(bptr->data, bptr->length);
+	    BIO_free_all(chain);
+
+	    auto sanitize = [](std::string& s) {
+		s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+		s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
+		s.erase(std::remove(s.begin(), s.end(), ' '), s.end());
+	    };
+	    sanitize(key_b64);
+
+	    std::ostringstream cmd;
+	    cmd << "ssh localhost \"echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
+	    system(cmd.str().c_str());
+
+	    std::cout << "[Client] Sent symmetric key to enclave.\n";
+	}
     }
 
     EVP_PKEY_free(pkey);

@@ -1,8 +1,8 @@
+
 enclave {
     include "sgx_tcrypto.h"
+    #define SYM_KEY_SIZE 32
     trusted {
-        public sgx_status_t ecall_generate_and_seal_key([out, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
-        public sgx_status_t ecall_unseal_key([in, size=sealed_size] uint8_t* sealed_data, uint32_t sealed_size);
         public sgx_status_t ecall_process_stats(
             [in, size=signed_data_len] const char* signed_data,
             uint32_t signed_data_len,
@@ -21,6 +21,15 @@ enclave {
             uint32_t out_mode_buf_len,
             [out] double* result
         );
+	    public sgx_status_t ecall_generate_master_key(int expected_keys);
+	    public sgx_status_t ecall_add_wrapping_key([in, size=SYM_KEY_SIZE] uint8_t* key, uint32_t len);
+	    public sgx_status_t ecall_get_wrapped_master_key([out, size=max_len] uint8_t* out,
+							     uint32_t max_len,
+							     [out] uint32_t* used_len);
+	    public sgx_status_t ecall_unwrap_master_key();
+
+	public sgx_status_t ecall_prepare_unwrapping([in, size=wrapped_len] const uint8_t* wrapped_data, uint32_t wrapped_len);
+
 
         public int ecc_verify(
             [in, size=len] uint8_t* data,

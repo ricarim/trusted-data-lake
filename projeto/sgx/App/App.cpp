@@ -33,7 +33,8 @@
 #define IV_SIZE 12
 #define TAG_SIZE 16
 #define SYM_KEY_SIZE 32
-#define MAX_WRAPPED_SIZE 1024
+#define MAX_WRAPPING_KEYS 2
+#define MAX_WRAPPED_SIZE (SYM_KEY_SIZE + MAX_WRAPPING_KEYS * (IV_SIZE + TAG_SIZE))
 #define SEALED_KEY_FILE "sealed_key.bin"
 #define MY_ERROR_ACCESS_DENIED 0xFFFF0001
 
@@ -56,7 +57,6 @@
 #define REPORT_SIZE 432
 
 sgx_enclave_id_t eid = 0;
-bool master_key_ready = false;
 
 // OCALL that enclave calls
 void ocall_printf(const char* str) {
@@ -216,6 +216,10 @@ void ocall_get_time(uint64_t* t) {
 int main() {
     sgx_status_t ret;
     sgx_status_t sgx_ret;
+    bool master_key_ready = false;
+    const char* gcs_wrapped_path = "gs://enclave_bucket/wrapped_key.bin";
+    const char* local_wrapped_file = "wrapped_key.bin";
+    bool restoring_existing_key = false;
 
     remove(PIPE_PATH);
     remove(RESPONSE_PIPE);
@@ -344,7 +348,7 @@ int main() {
     if (access(RESPONSE_PIPE, F_OK) != 0)
         mkfifo(RESPONSE_PIPE, 0666);
 
-    int pipe_fd = open(PIPE_PATH, O_RDONLY);
+    int pipe_fd = open(PIPE_PATH, O_RDWR);
     if (pipe_fd < 0) {
         perror("open pipe");
         return 1;
@@ -389,7 +393,7 @@ int main() {
                 } else if (ret == SGX_ERROR_BUSY) {
                     printf("[App] Waiting for more keys to unwrap...\n");
                 } else {
-                    printf("[App] Failed to unwrap master key: 0x%x\n", ret);
+		    printf("[App] Error unwrapping master key: SGX ret=0x%x, enclave ret=0x%x\n", ret, retval);
                 }
             }else{
                 std::vector<uint8_t> wrapped(1024);
@@ -410,7 +414,8 @@ int main() {
                 } else if (ret == SGX_ERROR_BUSY) {
                     printf("[App] Still waiting for more keys...\n");
                 } else {
-                    printf("[App] Error wrapping master key: 0x%x\n", ret);
+		    printf("[App] Error wrapping master key: SGX ret=0x%x, enclave ret=0x%x\n", ret, retval);
+
                 }
             }
 
