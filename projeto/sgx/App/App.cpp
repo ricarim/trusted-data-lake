@@ -430,7 +430,7 @@ int main() {
 
         if (tokens.size() == 6 && tokens[0] == "encrypt") {
             std::string signer = tokens[1];
-            std::string filename = tokens[2];
+	    std::string base64_data = tokens[2];
             std::string gcs_path = tokens[3];
             std::string timestamp = tokens[4];
             std::string signature_b64 = tokens[5];
@@ -443,7 +443,7 @@ int main() {
                 continue;
             }
 
-            std::string signed_data = "encrypt|" + signer + "|" + filename + "|" + gcs_path + "|" + timestamp;
+            std::string signed_data = "encrypt|" + signer + "|" + base64_data + "|" + gcs_path + "|" + timestamp;
 
             std::vector<uint8_t> sig_bin = base64_decode(signature_b64);
             if (sig_bin.size() != sizeof(sgx_ec256_signature_t)) {
@@ -469,9 +469,9 @@ int main() {
             }
 
 
-            size_t plaintext_len;
-            char* plaintext = read_file(filename.c_str(), &plaintext_len);
-            if (!plaintext) {
+	    std::vector<uint8_t> plaintext_bin = base64_decode(base64_data);
+	    size_t plaintext_len = plaintext_bin.size();
+            if (plaintext_bin.empty()) {
                 printf("[App] Failed to read input file\n");
                 continue;
             }
@@ -482,12 +482,10 @@ int main() {
             ret = ecall_generate_iv(eid, &retval, iv, IV_SIZE);
             if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
                 printf("[App] Failed to generate IV\n");
-                free(plaintext);
                 continue;
             }
 
-            ret = ecall_encrypt_data(eid, &retval, (uint8_t*)plaintext, plaintext_len, iv, IV_SIZE, ciphertext.data(), mac);
-            free(plaintext);
+            ret = ecall_encrypt_data(eid, &retval, (uint8_t*)plaintext_bin.data(), plaintext_len, iv, IV_SIZE, ciphertext.data(), mac);
 
             if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
                 printf("[App] Encryption failed\n");

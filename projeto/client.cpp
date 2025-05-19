@@ -190,8 +190,33 @@ int main(int argc, char* argv[]) {
             std::cout << "Enter CSV file name: ";
             std::getline(std::cin, filename);
 
+	    std::ifstream infile(filename, std::ios::binary);
+	    std::ostringstream contents;
+	    contents << infile.rdbuf();
+	    if (!infile.is_open()) {
+	    	std::cerr << "Error: Failed to open file '" << filename << "'\n";
+	    	continue;
+	    }
+ 	    std::string raw_data = contents.str();
+	    if (!infile.is_open()) {
+	    	std::cerr << "Error: Failed to open file '" << filename << "'\n";
+	    	continue;
+	    }
+
+	    BIO* b64 = BIO_new(BIO_f_base64());
+	    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+       	    BIO* mem = BIO_new(BIO_s_mem());
+	    BIO* chain = BIO_push(b64, mem);
+	    BIO_write(chain, raw_data.data(), raw_data.size());
+	    BIO_flush(chain);
+	    BUF_MEM* bptr;
+	    BIO_get_mem_ptr(mem, &bptr);
+	    std::string base64_file(bptr->data, bptr->length);
+	    BIO_free_all(chain);
+
+
             time_t now = time(nullptr);
-            std::string message = "encrypt|" + client_id + "|" + filename + "|" + gcs_path + "|" + std::to_string(now);
+            std::string message = "encrypt|" + client_id + "|" + base64_file + "|" + gcs_path + "|" + std::to_string(now);
             std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 
