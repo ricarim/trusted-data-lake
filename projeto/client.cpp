@@ -23,6 +23,21 @@ std::string other_id(const std::string& id) {
     return id == "lab" ? "hospital" : "lab";
 }
 
+void load_dotenv(const std::string& path = ".env") {
+    std::ifstream file(path);
+    if (!file.is_open()) return;
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        size_t delim = line.find('=');
+        if (delim == std::string::npos) continue;
+        std::string key = line.substr(0, delim);
+        std::string val = line.substr(delim + 1);
+        setenv(key.c_str(), val.c_str(), 1);
+    }
+}
+
 EVP_PKEY* load_private_key(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file) return nullptr;
@@ -167,6 +182,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    load_dotenv();
+    std::string ssh_user = getenv("SSH_USER");
+    std::string ssh_host = getenv("SSH_HOST");
+    std::string ssh_key_path = getenv("SSH_KEY");
+    std::string gcs_path = getenv("GCS_PATH");
 
     std::string key_path = "ecc_" + client_id + "_privkey.bin";
     EVP_PKEY* pkey = load_private_key(key_path);
@@ -228,7 +248,7 @@ int main(int argc, char* argv[]) {
             sanitize(sig);
 
             std::ostringstream cmd;
-            cmd << "ssh localhost \"echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
+            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user <<"@"<< ssh_host << "\echo '" << message << "|" << sig << "' > " << PIPE_PATH << "\"";
             system(cmd.str().c_str());
         } else if (choice == 2) {
             stats_menu();
@@ -267,7 +287,7 @@ int main(int argc, char* argv[]) {
             std::string full_msg = message + "|" + sig + "|" + other_sig;
 
             std::ostringstream cmd;
-            cmd << "ssh localhost \"echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
+            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user<< "@"<< ssh_host<<"\echo '" << message << "|" << sig << "|" << other_sig << "' > " << PIPE_PATH << "\"";
 
             system(cmd.str().c_str());
 
@@ -305,7 +325,7 @@ int main(int argc, char* argv[]) {
 	    sanitize(key_b64);
 
 	    std::ostringstream cmd;
-	    cmd << "ssh localhost \"echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
+	    cmd << "ssh -i " << ssh_key_path << " "<< ssh_user << "@" << ssh_host<< "\echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
 	    system(cmd.str().c_str());
 
 	    std::cout << "[Client] Sent symmetric key to enclave.\n";

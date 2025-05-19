@@ -38,4 +38,4 @@ sign_message
 *.pyc
 __pycache__/
 
-
+.env
