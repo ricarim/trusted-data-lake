@@ -102,14 +102,13 @@ std::string sign_message(const std::string& message, EVP_PKEY* pkey) {
 
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        std::cerr << "Usage: ./sign_message <private_key.bin> <message_string> <output_file.b64>\n";
+    if (argc != 3) {
+        std::cerr << "Usage: ./sign_message <private_key.bin> <message_string>\n";
         return 1;
     }
 
     const char* key_path = argv[1];
     std::string message = argv[2];
-    const char* output_path = argv[3];
 
     EVP_PKEY* pkey = load_private_key(key_path);
     if (!pkey) {
@@ -120,17 +119,15 @@ int main(int argc, char* argv[]) {
 
     std::string sig = sign_message(message, pkey);
 
-    std::ofstream outfile(output_path);
-    if (!outfile) {
-        std::cerr << "Failed to open output file: " << output_path << "\n";
+    if (sig.empty()) {
+        std::cerr << "Failed to generate signature.\n";
         return 1;
     }
-    outfile << sig;
-    outfile.close();
 
-    std::cout << "[+] Signature saved to: " << output_path << "\n";
+    std::cout << "[+] Signature (Base64, R||S):\n" << sig << "\n";
 
 
+    EVP_PKEY_free(pkey);
     return 0;
 }
 

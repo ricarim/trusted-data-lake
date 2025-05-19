@@ -252,14 +252,9 @@ int main(int argc, char* argv[]) {
             std::cout << "message: " << message << "\n";
             std::string sig = sign_message(message, pkey);
 
-            std::string sig_path;
-            std::cout << "Enter path to other party's signature file: ";
-            std::getline(std::cin, sig_path);
-
-            std::ifstream f(sig_path);
-            std::stringstream buf;
-            buf << f.rdbuf();
-            std::string other_sig = buf.str();
+            std::string other_sig;
+	    std::cout << "Paste the other party's signature: ";
+            std::getline(std::cin, other_sig);
 
             auto sanitize = [](std::string& s) {
                 s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
