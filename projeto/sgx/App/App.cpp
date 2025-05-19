@@ -504,9 +504,10 @@ int main() {
             memcpy(combined.data() + IV_SIZE, mac, TAG_SIZE);
             memcpy(combined.data() + IV_SIZE + TAG_SIZE, ciphertext.data(), ciphertext.size());
 
-            write_file("encrypted.bin", combined.data(), combined.size());
+	    std::string local_encrypted_file = signer + ".bin";
+	    write_file(local_encrypted_file.c_str(), combined.data(), combined.size());
 
-            if (upload_to_gcs("encrypted.bin", gcs_path.c_str()))
+            if (upload_to_gcs(local_encrypted_file.c_str(), gcs_path.c_str()))
                 printf("[App] Upload successful\n");
             else
                 printf("[App] Upload failed\n");
@@ -535,13 +536,18 @@ int main() {
                 }
             }else {
                 printf("[App] Local encrypted.bin is up-to-date. Skipping download.\n");
-            }
+	    
+		    std::string local_file = signer + ".bin";
+		    if (!download_from_gcs(gcs_path.c_str(), local_file)) {
+			printf("[App] Failed to download encrypted file\n");
+			continue;
+		    }
 
-            size_t total_len;
-            uint8_t* full_data = (uint8_t*)read_file("encrypted.bin", &total_len);
-            if (!full_data || total_len < IV_SIZE + TAG_SIZE) {
-                printf("[App] Encrypted file invalid\n");
-                continue;
+		    size_t total_len;
+		    uint8_t* full_data = (uint8_t*)read_file(local_file, &total_len);
+		    if (!full_data || total_len < IV_SIZE + TAG_SIZE) {
+			printf("[App] Encrypted file invalid\n");
+			continue;
             }
 
             uint8_t iv[IV_SIZE], mac[TAG_SIZE];
@@ -588,6 +594,7 @@ int main() {
 
             char mode_buf[64];
             double result = 0.0;
+
             ret = ecall_process_stats(
                 eid, &retval,
                 signed_data,
@@ -602,6 +609,7 @@ int main() {
                 mode_buf, sizeof(mode_buf),
                 &result
             );
+
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");
 
