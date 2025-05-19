@@ -528,27 +528,24 @@ int main() {
                 continue;
             }
 
-            if (is_remote_newer(gcs_path.c_str(), "encrypted.bin")) {
+	    std::string local_file = signer + ".bin";
+            if (is_remote_newer(gcs_path.c_str(), local_file.c_str())) {
                 printf("[App] Remote file is newer, downloading...\n");
-                if (!download_from_gcs(gcs_path.c_str(), "encrypted.bin")) {
+                if (!download_from_gcs(gcs_path.c_str(), local_file.c_str())) {
                     printf("[App] Failed to download encrypted file\n");
                     continue;
                 }
             }else {
                 printf("[App] Local encrypted.bin is up-to-date. Skipping download.\n");
 	    
-		    std::string local_file = signer + ".bin";
-		    if (!download_from_gcs(gcs_path.c_str(), local_file)) {
-			printf("[App] Failed to download encrypted file\n");
-			continue;
-		    }
+	    }
 
 		    size_t total_len;
-		    uint8_t* full_data = (uint8_t*)read_file(local_file, &total_len);
+		    uint8_t* full_data = (uint8_t*)read_file(local_file.c_str(), &total_len);
 		    if (!full_data || total_len < IV_SIZE + TAG_SIZE) {
 			printf("[App] Encrypted file invalid\n");
 			continue;
-            }
+            	   }
 
             uint8_t iv[IV_SIZE], mac[TAG_SIZE];
             memcpy(iv, full_data, IV_SIZE);
@@ -592,7 +589,7 @@ int main() {
                            categorical_columns.end(),
                            column) != categorical_columns.end());
 
-            char mode_buf[64];
+            char mode_buf[512];
             double result = 0.0;
 
             ret = ecall_process_stats(

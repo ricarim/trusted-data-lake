@@ -368,11 +368,13 @@ sgx_status_t ecall_mode_string(const char** data, size_t len, char* result_buf, 
         }
     }
 
-    if (mode.empty() || mode.size() + 1 > buf_size) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
+    if (mode.empty()) {
+	    return SGX_ERROR_INVALID_PARAMETER;
+	}
 
-    strncpy(result_buf, mode.c_str(), buf_size);
+    size_t copy_len = std::min(mode.size(), buf_size - 1);
+    memcpy(result_buf, mode.c_str(), copy_len);
+    result_buf[copy_len] = '\0';
     return SGX_SUCCESS;
 }
 
@@ -531,11 +533,23 @@ sgx_status_t ecall_process_stats(
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    const sgx_ec256_signature_t* sig_hospital = reinterpret_cast<const sgx_ec256_signature_t*>(sig1);
-    const sgx_ec256_signature_t* sig_lab = reinterpret_cast<const sgx_ec256_signature_t*>(sig2);
+    const sgx_ec256_signature_t* sig1_struct = reinterpret_cast<const sgx_ec256_signature_t*>(sig1);
+    const sgx_ec256_signature_t* sig2_struct = reinterpret_cast<const sgx_ec256_signature_t*>(sig2);
 
-    bool valid_hosp = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig_hospital), SIGNER_HOSPITAL);
-    bool valid_lab  = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig_lab), SIGNER_LAB);
+    std::string initiator = parts[1];
+    bool valid_hosp = false, valid_lab = false;
+
+    if (initiator == "hospital") {
+    valid_hosp = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig1_struct), SIGNER_HOSPITAL);
+    valid_lab  = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig2_struct), SIGNER_LAB);
+} else if (initiator == "lab") {
+    valid_lab  = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig1_struct), SIGNER_LAB);
+    valid_hosp = ecc_verify((uint8_t*)msg_str.data(), msg_str.size(), const_cast<sgx_ec256_signature_t*>(sig2_struct), SIGNER_HOSPITAL);
+} else {
+	std::string msg = "[Enclave] Unknown initiator: " + initiator + "\n";
+	ocall_printf(msg.c_str());
+    return SGX_ERROR_INVALID_PARAMETER;
+}
 
     if (!(valid_hosp && valid_lab)) {
         ocall_printf("[Enclave] Signature verification failed for one or both parties.\n");
@@ -622,10 +636,17 @@ sgx_status_t ecall_process_stats(
                 return ecall_mode(numbers.data(), numbers.size(), result);
             } else if (!strings.empty()) {
                 std::vector<const char*> cstrs;
-                for (const auto& s : strings) cstrs.push_back(s.c_str());
+		    for (const auto& s : strings) {
+		cstrs.push_back(s.c_str());
+	    }
 
-                char mode_buf[64] = {0};
+                char mode_buf[512] = {0};
                 sgx_status_t ret = ecall_mode_string(cstrs.data(), cstrs.size(), mode_buf, sizeof(mode_buf));
+		    if (ret != SGX_SUCCESS) {
+        ocall_printf("[Enclave] ecall_mode_string failed.\n");
+        return ret;
+    }
+
                 memcpy(out_mode_buf, mode_buf, std::min(strlen(mode_buf)+1, static_cast<size_t>(out_mode_buf_len)));
                 return ret;
             } else {
