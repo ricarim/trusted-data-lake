@@ -33,6 +33,7 @@
 #define IV_SIZE 12
 #define TAG_SIZE 16
 #define SYM_KEY_SIZE 32
+#define MAX_WRAPPED_SIZE 1024
 #define SEALED_KEY_FILE "sealed_key.bin"
 #define MY_ERROR_ACCESS_DENIED 0xFFFF0001
 
@@ -55,6 +56,7 @@
 #define REPORT_SIZE 432
 
 sgx_enclave_id_t eid = 0;
+bool master_key_ready = false;
 
 // OCALL that enclave calls
 void ocall_printf(const char* str) {
@@ -302,33 +304,40 @@ int main() {
     }
 
 
-    uint32_t sealed_size = sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE;
-    uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
+    bool gcs_has_wrapped = download_from_gcs(gcs_wrapped_path, local_wrapped_file);
 
-    if (access(SEALED_KEY_FILE, F_OK) != 0) {
-        printf("[App] Generating and sealing symmetric key...\n");
-        ret = ecall_generate_and_seal_key(eid, &retval, sealed_data, sealed_size);
+    if (gcs_has_wrapped) {
+        printf("[App] Found wrapped master key in cloud. Preparing to unwrap...\n");
+
+        size_t wrapped_len = 0;
+        uint8_t* wrapped_data = (uint8_t*)read_file(local_wrapped_file, &wrapped_len);
+        if (!wrapped_data) {
+            printf("[App] Failed to read wrapped_key.bin after download\n");
+            return 1;
+        }
+
+        ret = ecall_prepare_unwrapping(eid, &retval, wrapped_data, (uint32_t)wrapped_len);
+        free(wrapped_data);
         if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-            printf("[App] Failed to seal key.\n");
+            printf("[App] Failed to prepare unwrapping inside enclave\n");
             return 1;
         }
-        if (!save_sealed_key(SEALED_KEY_FILE, sealed_data, sealed_size)) {
-            printf("[App] Failed to save sealed key.\n");
-            return 1;
-        }
+
+        restoring_existing_key = true;
+
     } else {
-        printf("[App] Loading sealed key from file...\n");
-        if (!load_sealed_key(SEALED_KEY_FILE, &sealed_data, &sealed_size)) {
-            printf("[App] Failed to load sealed key.\n");
-            return 1;
-        }
-        ret = ecall_unseal_key(eid, &retval, sealed_data, sealed_size);
+        printf("[App] No wrapped key found in cloud. Generating new master key...\n");
+
+        int expected_keys = 2;
+        ret = ecall_generate_master_key(eid, &retval, expected_keys);
         if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-            printf("[App] Failed to unseal key.\n");
+            printf("[App] Failed to generate master key\n");
             return 1;
         }
+
+        restoring_existing_key = false;
     }
-    free(sealed_data);
+
 
     if (access(PIPE_PATH, F_OK) != 0)
         mkfifo(PIPE_PATH, 0666);
@@ -357,6 +366,62 @@ int main() {
             tok = strtok(nullptr, "|");
         }
         
+        if (tokens.size() == 2 && tokens[0] == "addkey") {
+            std::vector<uint8_t> key_bin = base64_decode(tokens[1]);
+            if (key_bin.size() != SYM_KEY_SIZE) {
+                printf("[App] Invalid key length\n");
+                continue;
+            }
+
+            ret = ecall_add_wrapping_key(eid, &retval, key_bin.data(), key_bin.size());
+            if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
+                printf("[App] Failed to add sk_i to enclave\n");
+                continue;
+            }
+            printf("[App] Key added.\n");
+
+
+            if (restoring_existing_key) {
+                ret = ecall_unwrap_master_key(eid, &retval);
+                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS) {
+                    printf("[App] Master key unwrapped successfully.\n");
+                    master_key_ready = true;
+                } else if (ret == SGX_ERROR_BUSY) {
+                    printf("[App] Waiting for more keys to unwrap...\n");
+                } else {
+                    printf("[App] Failed to unwrap master key: 0x%x\n", ret);
+                }
+            }else{
+                std::vector<uint8_t> wrapped(1024);
+                uint32_t used_len = 0;
+                ret = ecall_get_wrapped_master_key(eid, &retval, wrapped.data(), wrapped.size(), &used_len);
+                if (ret == SGX_SUCCESS && retval == SGX_SUCCESS) {
+                    wrapped.resize(used_len);
+                    write_file("wrapped_key.bin", wrapped.data(), wrapped.size());
+                    printf("[App] Master key successfully wrapped and saved.\n");
+
+                    const char* gcs_dest = "gs://enclave_bucket/wrapped_key.bin";
+                    if (upload_to_gcs("wrapped_key.bin", gcs_dest))
+                        printf("[App] Uploaded to GCS: %s\n", gcs_dest);
+                    else
+                        printf("[App]Upload failed\n");
+
+                    master_key_ready = true;
+                } else if (ret == SGX_ERROR_BUSY) {
+                    printf("[App] Still waiting for more keys...\n");
+                } else {
+                    printf("[App] Error wrapping master key: 0x%x\n", ret);
+                }
+            }
+
+            continue;
+        }
+
+        if (!master_key_ready) {
+            printf("[App] Master key is not ready. Skipping command.\n");
+            continue;
+        }
+
 
         if (tokens.size() == 6 && tokens[0] == "encrypt") {
             std::string signer = tokens[1];

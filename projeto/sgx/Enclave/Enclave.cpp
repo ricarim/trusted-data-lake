@@ -31,6 +31,10 @@
 
 static sgx_aes_gcm_128bit_key_t g_sym_key;
 static bool g_sym_key_ready = false;
+std::vector<std::vector<uint8_t>> g_wrapping_keys;
+static std::vector<uint8_t> g_wrapped_sk_m;
+static int g_expected_keys = 0;
+
 
 #define SIGNER_HOSPITAL 0
 #define SIGNER_LAB 1
@@ -89,16 +93,117 @@ sgx_status_t ecall_generate_iv(uint8_t* iv, size_t iv_len) {
 }
 
 
-sgx_status_t ecall_generate_and_seal_key(uint8_t* sealed_data, uint32_t sealed_size) {
-    if (!sealed_data || sealed_size < sizeof(sgx_sealed_data_t) + SYM_KEY_SIZE)
-        return SGX_ERROR_INVALID_PARAMETER;
 
+
+sgx_status_t ecall_generate_master_key(int expected_keys) {
     sgx_status_t ret = sgx_read_rand((uint8_t*)&g_sym_key, SYM_KEY_SIZE);
     if (ret != SGX_SUCCESS) return ret;
 
     g_sym_key_ready = true;
-    return sgx_seal_data(0, NULL, SYM_KEY_SIZE, (uint8_t*)&g_sym_key, sealed_size, (sgx_sealed_data_t*)sealed_data);
+    g_wrapping_keys.clear();  
+    g_expected_keys = expected_keys;
+
+    return SGX_SUCCESS;
 }
+
+sgx_status_t ecall_prepare_unwrapping(const uint8_t* wrapped_data, uint32_t wrapped_len) {
+    if (!wrapped_data || wrapped_len == 0)
+        return SGX_ERROR_INVALID_PARAMETER;
+
+    g_wrapped_sk_m.assign(wrapped_data, wrapped_data + wrapped_len);
+    g_wrapping_keys.clear(); 
+    g_sym_key_ready = false;
+
+    return SGX_SUCCESS;
+}
+
+sgx_status_t ecall_add_wrapping_key(uint8_t* key, uint32_t len) {
+    if (!key || len != SYM_KEY_SIZE)
+        return SGX_ERROR_INVALID_PARAMETER;
+    if (g_wrapping_keys.size() >= 10)
+        return SGX_ERROR_OUT_OF_MEMORY;
+
+    g_wrapping_keys.emplace_back(key, key + len);
+    return SGX_SUCCESS;
+}
+
+
+
+sgx_status_t ecall_get_wrapped_master_key(uint8_t* out, uint32_t max_len, uint32_t* used_len) {
+    if (g_wrapping_keys.size() < static_cast<size_t>(g_expected_keys))
+        return SGX_ERROR_BUSY;
+    if (!g_sym_key_ready || !out || !used_len)
+        return SGX_ERROR_INVALID_PARAMETER;
+
+    std::vector<uint8_t> sk_m(g_sym_key, g_sym_key + SYM_KEY_SIZE);
+    std::vector<uint8_t> wrapped = recursive_wrap(g_wrapping_keys, sk_m);
+
+    if (wrapped.size() > max_len)
+        return SGX_ERROR_INVALID_PARAMETER;
+
+    memcpy(out, wrapped.data(), wrapped.size());
+    *used_len = static_cast<uint32_t>(wrapped.size());
+    return SGX_SUCCESS;
+}
+
+sgx_status_t ecall_unwrap_master_key()
+{
+    if (g_wrapped_sk_m.empty())               return SGX_ERROR_INVALID_STATE;
+    if (g_wrapping_keys.empty())              return SGX_ERROR_BUSY;
+
+    std::vector<uint8_t> blob = g_wrapped_sk_m;
+
+    // apply keys in order of arrival (sk1 .. skN)
+    for (const auto& key : g_wrapping_keys) {
+        std::vector<uint8_t> plain;
+        sgx_status_t ret = aesgcm_decrypt(key.data(), blob.data(),
+                                          blob.size(), plain);
+        if (ret != SGX_SUCCESS)               return ret;
+        blob.swap(plain);
+    }
+
+    if (blob.size() != SYM_KEY_SIZE)          return SGX_ERROR_UNEXPECTED;
+
+    memcpy(g_sym_key, blob.data(), SYM_KEY_SIZE);
+    g_sym_key_ready = true;
+    return SGX_SUCCESS;
+}
+
+
+std::vector<uint8_t> recursive_wrap(
+    const std::vector<std::vector<uint8_t>>& keys,
+    const std::vector<uint8_t>& master_key
+) {
+    std::vector<uint8_t> wrapped = master_key;
+
+    for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+        const std::vector<uint8_t>& key = *it;
+
+        std::vector<uint8_t> iv(12);
+        sgx_read_rand(iv.data(), 12);
+
+        std::vector<uint8_t> ct(wrapped.size());
+        sgx_aes_gcm_128bit_tag_t tag;
+
+        sgx_rijndael128GCM_encrypt(
+            reinterpret_cast<const sgx_aes_gcm_128bit_key_t*>(key.data()),
+            wrapped.data(), static_cast<uint32_t>(wrapped.size()),
+            ct.data(),
+            iv.data(), static_cast<uint32_t>(iv.size()),
+            nullptr, 0,
+            &tag
+        );
+
+        wrapped.clear();
+        wrapped.insert(wrapped.end(), iv.begin(), iv.end());
+        wrapped.insert(wrapped.end(), tag.begin(), tag.end());
+        wrapped.insert(wrapped.end(), ct.begin(), ct.end());
+    }
+
+    return wrapped;
+}
+
+
 
 sgx_status_t ecall_unseal_key(uint8_t* sealed_data, uint32_t sealed_size) {
     if (!sealed_data || sealed_size == 0) return SGX_ERROR_INVALID_PARAMETER;
