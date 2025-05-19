@@ -154,20 +154,36 @@ std::string get_stat_name(int op) {
 
 
 void read_response() {
-    while (access(RESPONSE_PIPE, F_OK) != 0) {
-        usleep(10000);
-    }
+    std::string ssh_user = getenv("SSH_USER");
+    std::string ssh_host = getenv("SSH_HOST");
+    std::string ssh_key_path = getenv("SSH_KEY");
 
-    std::ifstream resp(RESPONSE_PIPE);
-    if (!resp.is_open()) return;
+    if (ssh_user.empty() || ssh_host.empty()) {
+        std::cerr << "[Client] Missing SSH_USER or SSH_HOST in environment.\n";
+        return;
+    }
+    
+    std::ostringstream cmd;
+    cmd << "ssh -i " << ssh_key_path << " "
+        << ssh_user << "@" << ssh_host
+        << " 'timeout 3s cat /tmp/sgx_response && rm /tmp/sgx_response'";
+
+
+    FILE* pipe = popen(cmd.str().c_str(), "r");
+    if (!pipe) {
+        std::cerr << "[Client] Failed to open SSH stream.\n";
+        return;
+    }
 
     std::cout << "\n[Client] Response from SGX App:\n";
-    std::string line;
-    while (std::getline(resp, line)) {
-        std::cout << "  " << line << "\n";
+    char buffer[256];
+
+
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        std::cout << "  " << buffer;
     }
-    resp.close();
-    std::remove(RESPONSE_PIPE);
+
+    pclose(pipe);
 }
 
 int main(int argc, char* argv[]) {
@@ -210,29 +226,29 @@ int main(int argc, char* argv[]) {
             std::cout << "Enter CSV file name: ";
             std::getline(std::cin, filename);
 
-	    std::ifstream infile(filename, std::ios::binary);
-	    std::ostringstream contents;
-	    contents << infile.rdbuf();
-	    if (!infile.is_open()) {
-	    	std::cerr << "Error: Failed to open file '" << filename << "'\n";
-	    	continue;
-	    }
- 	    std::string raw_data = contents.str();
-	    if (!infile.is_open()) {
-	    	std::cerr << "Error: Failed to open file '" << filename << "'\n";
-	    	continue;
-	    }
+            std::ifstream infile(filename, std::ios::binary);
+            std::ostringstream contents;
+            contents << infile.rdbuf();
+            if (!infile.is_open()) {
+                std::cerr << "Error: Failed to open file '" << filename << "'\n";
+                continue;
+            }
+            std::string raw_data = contents.str();
+            if (!infile.is_open()) {
+                std::cerr << "Error: Failed to open file '" << filename << "'\n";
+                continue;
+            }
 
-	    BIO* b64 = BIO_new(BIO_f_base64());
-	    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-       	    BIO* mem = BIO_new(BIO_s_mem());
-	    BIO* chain = BIO_push(b64, mem);
-	    BIO_write(chain, raw_data.data(), raw_data.size());
-	    BIO_flush(chain);
-	    BUF_MEM* bptr;
-	    BIO_get_mem_ptr(mem, &bptr);
-	    std::string base64_file(bptr->data, bptr->length);
-	    BIO_free_all(chain);
+            BIO* b64 = BIO_new(BIO_f_base64());
+            BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+                BIO* mem = BIO_new(BIO_s_mem());
+            BIO* chain = BIO_push(b64, mem);
+            BIO_write(chain, raw_data.data(), raw_data.size());
+            BIO_flush(chain);
+            BUF_MEM* bptr;
+            BIO_get_mem_ptr(mem, &bptr);
+            std::string base64_file(bptr->data, bptr->length);
+            BIO_free_all(chain);
 
 
             time_t now = time(nullptr);

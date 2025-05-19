@@ -35,7 +35,6 @@ std::vector<std::vector<uint8_t>> g_wrapping_keys;
 static std::vector<uint8_t> g_wrapped_sk_m;
 static int g_expected_keys = 0;
 
-
 #define SIGNER_HOSPITAL 0
 #define SIGNER_LAB 1
 
@@ -58,8 +57,6 @@ sgx_status_t ecall_create_report(uint8_t* target_info_buf, uint8_t* report_buf) 
     sgx_report_data_t report_data = { 0 };
     return sgx_create_report(target_info, &report_data, report);
 }
-
-
 
 int ecc_verify(uint8_t* data, size_t len, sgx_ec256_signature_t* sig,int signer_type) {
     if (!data || !sig || (signer_type != SIGNER_HOSPITAL && signer_type != SIGNER_LAB)) {
@@ -91,9 +88,6 @@ sgx_status_t ecall_generate_iv(uint8_t* iv, size_t iv_len) {
 
     return sgx_read_rand(iv, (uint32_t)iv_len);
 }
-
-
-
 
 sgx_status_t ecall_generate_master_key(int expected_keys) {
     sgx_status_t ret = sgx_read_rand((uint8_t*)&g_sym_key, SYM_KEY_SIZE);

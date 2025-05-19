@@ -308,7 +308,14 @@ int main() {
     }
 
 
-    bool gcs_has_wrapped = download_from_gcs(gcs_wrapped_path, local_wrapped_file);
+    bool gcs_has_wrapped = false;
+    if (is_remote_newer(gcs_wrapped_path, local_wrapped_file)) {
+        printf("[App] Wrapped key in GCS is newer. Downloading...\n");
+        gcs_has_wrapped = download_from_gcs(gcs_wrapped_path, local_wrapped_file);
+    } else {
+        printf("[App] Local wrapped_key.bin is up-to-date. Skipping download.\n");
+        gcs_has_wrapped = (access(local_wrapped_file, F_OK) == 0);
+    }
 
     if (gcs_has_wrapped) {
         printf("[App] Found wrapped master key in cloud. Preparing to unwrap...\n");
@@ -520,10 +527,14 @@ int main() {
                 continue;
             }
 
-
-            if (!download_from_gcs(gcs_path.c_str(), "encrypted.bin")) {
-                printf("[App] Failed to download encrypted file\n");
-                continue;
+            if (is_remote_newer(gcs_path.c_str(), "encrypted.bin")) {
+                printf("[App] Remote file is newer, downloading...\n");
+                if (!download_from_gcs(gcs_path.c_str(), "encrypted.bin")) {
+                    printf("[App] Failed to download encrypted file\n");
+                    continue;
+                }
+            }else {
+                printf("[App] Local encrypted.bin is up-to-date. Skipping download.\n");
             }
 
             size_t total_len;
@@ -593,6 +604,7 @@ int main() {
             );
 
             FILE* resp = fopen(RESPONSE_PIPE, "w");
+
             if (resp) {
                 if (ret == SGX_SUCCESS && retval == SGX_SUCCESS){
                         fprintf(resp, "[App] Authorization granted\n");
