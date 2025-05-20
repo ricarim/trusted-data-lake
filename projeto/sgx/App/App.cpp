@@ -6,28 +6,27 @@
 #include <algorithm>
 #include <ctime>
 #include <cstdint>
-#include <sgx_error.h>
-#include <sgx_tseal.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string>
-#include <sgx_urts.h>
+#include <vector>
 #include <sys/stat.h>
 #include <time.h>
-#include <vector>
-#include <time.h>
-#include "sgx_dcap_quoteverify.h"
-#include <openssl/bio.h>
-#include <openssl/evp.h>
+#include <string.h>
+
+#include <sgx_urts.h>
+#include <sgx_error.h>
 #include <sgx_report.h>
+#include <sgx_dcap_quoteverify.h>
 #include <sgx_ql_quote.h>
 #include <sgx_ql_lib_common.h>
 #include <sgx_dcap_ql_wrapper.h>
-#include <openssl/ecdsa.h>
+
+#include <openssl/bio.h>
 #include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/bn.h>
+
 #include "Enclave_u.h"
+
 
 #define ENCLAVE_FILE "enclave.signed.so"
 #define IV_SIZE 12

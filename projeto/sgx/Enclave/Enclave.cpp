@@ -1,28 +1,18 @@
-#include <cstdint>
-#include <algorithm>
-#include <string>
-#include <cctype>
-#include <ctime>
-#include <openssl/evp.h>
-#include <openssl/bio.h>
-#include <openssl/buffer.h>
-#include <openssl/pem.h>
 #include <vector>
-#include <sstream>
-#include "Enclave_t.h"
-#include "sgx_tcrypto.h"
+#include <string>
+#include <map>
+#include <numeric>
+#include <cmath>
 #include <cstring>
 #include <sstream>
-#include <stdint.h>
-#include <stdbool.h>
+#include <algorithm>
+
+#include "Enclave_t.h"
 #include "sgx_trts.h"
-#include "sgx_tseal.h"
+#include "sgx_tcrypto.h"
 #include "sgx_report.h"
 #include "sgx_utils.h"
-#include <map>
-#include <numeric>  
-#include <cmath>    
-#include <openssl/err.h>
+
 
 #define MY_ERROR_ACCESS_DENIED ((sgx_status_t)0xFFFF0001)
 #define SYM_KEY_SIZE 32 
