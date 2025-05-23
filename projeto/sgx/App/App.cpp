@@ -535,7 +535,7 @@ int main() {
                     continue;
                 }
             }else {
-                printf("[App] Local encrypted.bin is up-to-date. Skipping download.\n");
+                printf("[App] Local file is up-to-date. Skipping download.\n");
 	    
 	    }
 
