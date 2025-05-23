@@ -16,6 +16,7 @@
 *.privkey
 *private*
 ecc_*_privkey.*
+sk_*.bin
 .config_SIM_DEBUG_x64
 .config_HW_DEBUG_x64
 

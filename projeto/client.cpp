@@ -212,6 +212,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    std::string sim_key_path = "sk_" + client_id + ".bin";
+    
+
     while (true) {
         show_menu();
         int choice;
@@ -309,43 +312,43 @@ int main(int argc, char* argv[]) {
 
             read_response();
         }else if(choice == 3){
-	    std::ifstream key_file(key_path, std::ios::binary);
-	    if (!key_file) {
-		std::cerr << "Failed to open key file: " << key_path << "\n";
-		continue;
-	    }
+            std::ifstream key_file(sim_key_path, std::ios::binary);
+            if (!key_file) {
+            std::cerr << "Failed to open symmetric key file: " << key_path << "\n";
+            continue;
+            }
 
-	    std::vector<unsigned char> key_bytes(32);
-	    key_file.read((char*)key_bytes.data(), 32);
-	    if (key_file.gcount() != 32) {
-		std::cerr << "Invalid key length in file\n";
-		continue;
-	    }
+            std::vector<unsigned char> key_bytes(32);
+            key_file.read((char*)key_bytes.data(), 32);
+            if (key_file.gcount() != 32) {
+            std::cerr << "Invalid key length in file\n";
+            continue;
+            }
 
-	    BIO* b64 = BIO_new(BIO_f_base64());
-	    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-	    BIO* mem = BIO_new(BIO_s_mem());
-	    BIO* chain = BIO_push(b64, mem);
-	    BIO_write(chain, key_bytes.data(), key_bytes.size());
-	    BIO_flush(chain);
-	    BUF_MEM* bptr;
-	    BIO_get_mem_ptr(mem, &bptr);
-	    std::string key_b64(bptr->data, bptr->length);
-	    BIO_free_all(chain);
+            BIO* b64 = BIO_new(BIO_f_base64());
+            BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+            BIO* mem = BIO_new(BIO_s_mem());
+            BIO* chain = BIO_push(b64, mem);
+            BIO_write(chain, key_bytes.data(), key_bytes.size());
+            BIO_flush(chain);
+            BUF_MEM* bptr;
+            BIO_get_mem_ptr(mem, &bptr);
+            std::string key_b64(bptr->data, bptr->length);
+            BIO_free_all(chain);
 
-	    auto sanitize = [](std::string& s) {
-		s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
-		s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
-		s.erase(std::remove(s.begin(), s.end(), ' '), s.end());
-	    };
-	    sanitize(key_b64);
+            auto sanitize = [](std::string& s) {
+            s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+            s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
+            s.erase(std::remove(s.begin(), s.end(), ' '), s.end());
+            };
+            sanitize(key_b64);
 
-	    std::ostringstream cmd;
-	    cmd << "ssh -i " << ssh_key_path << " "<< ssh_user << "@" << ssh_host<<" \"echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
-	    system(cmd.str().c_str());
+            std::ostringstream cmd;
+            cmd << "ssh -i " << ssh_key_path << " "<< ssh_user << "@" << ssh_host<<" \"echo 'addkey|" << key_b64 << "' > " << PIPE_PATH << "\"";
+            system(cmd.str().c_str());
 
-	    std::cout << "[Client] Sent symmetric key to enclave.\n";
-	}
+            std::cout << "[Client] Sent symmetric key to enclave.\n";
+        }
     }
 
     EVP_PKEY_free(pkey);

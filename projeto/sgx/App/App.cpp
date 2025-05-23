@@ -385,7 +385,7 @@ int main() {
 
             ret = ecall_add_wrapping_key(eid, &retval, key_bin.data(), key_bin.size());
             if (ret != SGX_SUCCESS || retval != SGX_SUCCESS) {
-                printf("[App] Failed to add sk_i to enclave\n");
+                printf("[App] Failed to add sk to enclave\n");
                 continue;
             }
             printf("[App] Key added.\n");
